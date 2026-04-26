@@ -33,17 +33,20 @@ def scan_networks(rescan: bool = True) -> list[dict]:
     for unprivileged callers and returns only the active BSSID.  We therefore
     run the rescan step under sudo; the cached listing step doesn't need it.
     """
-    wan = current_app.config["WAN_INTERFACE"]
     try:
-        if rescan:
-            # sudo gives NM authority to do a full sweep (all channels)
-            _sudo(["nmcli", "dev", "wifi", "rescan", "ifname", wan], timeout=10)
         list_cmd = [
             "nmcli", "--mode", "multiline", "--escape", "no",
             "-f", "SSID,SIGNAL,SECURITY,ACTIVE",
             "dev", "wifi", "list",
         ]
-        result = _sudo(list_cmd, timeout=15) if rescan else _run(list_cmd, timeout=15)
+        if rescan:
+            # --rescan yes blocks until the sweep completes before returning
+            # results.  Run under sudo so NM grants authority for a full
+            # multi-channel scan (system users have no PolicyKit session).
+            list_cmd += ["--rescan", "yes"]
+            result = _sudo(list_cmd, timeout=30)
+        else:
+            result = _run(list_cmd, timeout=15)
         networks: list[dict] = []
         seen: set[str] = set()
         entry: dict = {}
