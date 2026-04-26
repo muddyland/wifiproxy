@@ -233,10 +233,7 @@ document.getElementById('scan-btn').addEventListener('click', async function() {
     }
     let html = '<ul class="list-group list-group-flush">';
     networks.forEach(n => {
-      const bars = n.signal > 66 ? 3 : n.signal > 33 ? 2 : 1;
-      const barIcons = Array.from({length: 3}, (_, i) =>
-        `<i class="fa-solid fa-signal" style="opacity:${i < bars ? 1 : 0.25}"></i>`
-      ).join('');
+      const sigClass = n.signal > 66 ? 'text-success' : n.signal > 33 ? 'text-warning' : 'text-danger';
       const isSaved = savedSsids.has(n.ssid);
       html += `<li class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
         <div>
@@ -246,7 +243,7 @@ document.getElementById('scan-btn').addEventListener('click', async function() {
           <br><small class="text-muted">${escHtml(n.security)}</small>
         </div>
         <div class="d-flex align-items-center gap-2">
-          <span class="text-muted small">${barIcons}</span>
+          <span class="${sigClass} small fw-semibold">${n.signal}%</span>
           <button class="btn btn-sm btn-outline-primary use-ssid" data-ssid="${escAttr(n.ssid)}">Use</button>
         </div>
       </li>`;

@@ -2,6 +2,8 @@ import subprocess
 from typing import Optional
 from flask import current_app
 
+_KEY_MGMT_ERROR = "key-mgmt"
+
 
 def _run(cmd: list, timeout: int = 30) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
@@ -11,31 +13,43 @@ def _sudo(cmd: list, timeout: int = 30) -> subprocess.CompletedProcess:
     return _run(["sudo"] + cmd, timeout=timeout)
 
 
+def _flush_entry(entry: dict, networks: list, seen: set) -> None:
+    ssid = entry.get("ssid", "")
+    if ssid and ssid not in seen:
+        seen.add(ssid)
+        networks.append(entry)
+
+
 def scan_networks(rescan: bool = True) -> list[dict]:
     """Return visible WiFi networks sorted by signal strength.
 
     Uses nmcli multiline output to avoid colon-in-SSID parsing ambiguity.
+    The parser flushes each entry when the next SSID line appears, so it
+    works even if nmcli omits blank-line separators between entries.
     Pass rescan=False to use the cached scan result (faster, non-disruptive).
+
+    A full channel sweep requires elevated NM permissions (PolicyKit).  The
+    wifiproxy system user has no active session so NM silently skips the sweep
+    for unprivileged callers and returns only the active BSSID.  We therefore
+    run the rescan step under sudo; the cached listing step doesn't need it.
     """
+    wan = current_app.config["WAN_INTERFACE"]
     try:
-        cmd = [
+        if rescan:
+            # sudo gives NM authority to do a full sweep (all channels)
+            _sudo(["nmcli", "dev", "wifi", "rescan", "ifname", wan], timeout=10)
+        list_cmd = [
             "nmcli", "--mode", "multiline", "--escape", "no",
             "-f", "SSID,SIGNAL,SECURITY,ACTIVE",
             "dev", "wifi", "list",
         ]
-        if rescan:
-            cmd += ["--rescan", "yes"]
-        result = _run(cmd, timeout=20)
-        networks = []
+        result = _sudo(list_cmd, timeout=15) if rescan else _run(list_cmd, timeout=15)
+        networks: list[dict] = []
         seen: set[str] = set()
         entry: dict = {}
         for raw_line in result.stdout.splitlines():
             line = raw_line.strip()
             if not line:
-                if entry.get("ssid") and entry["ssid"] not in seen:
-                    seen.add(entry["ssid"])
-                    networks.append(entry)
-                entry = {}
                 continue
             if ":" not in line:
                 continue
@@ -43,15 +57,16 @@ def scan_networks(rescan: bool = True) -> list[dict]:
             key = key.strip()
             val = val.strip()
             if key == "SSID":
-                entry["ssid"] = val
+                # Starting a new AP entry — flush the previous one first
+                _flush_entry(entry, networks, seen)
+                entry = {"ssid": val}
             elif key == "SIGNAL":
                 entry["signal"] = int(val) if val.isdigit() else 0
             elif key == "SECURITY":
                 entry["security"] = val if val and val != "--" else "Open"
             elif key == "ACTIVE":
                 entry["active"] = val == "yes"
-        if entry.get("ssid") and entry["ssid"] not in seen:
-            networks.append(entry)
+        _flush_entry(entry, networks, seen)
         return sorted(networks, key=lambda x: x.get("signal", 0), reverse=True)
     except Exception as e:
         current_app.logger.error("WiFi scan error: %s", e)
@@ -96,7 +111,11 @@ def get_current_connection() -> dict:
 
 
 def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool, str]:
-    """Connect to a WiFi network via nmcli."""
+    """Connect to a WiFi network via nmcli.
+
+    If the existing NM connection profile is malformed (missing key-mgmt),
+    delete it and retry so nmcli creates a fresh, correct profile.
+    """
     wan = current_app.config["WAN_INTERFACE"]
     cmd = ["nmcli", "dev", "wifi", "connect", ssid, "ifname", wan]
     if password:
@@ -107,7 +126,18 @@ def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool
         r = _run(cmd, timeout=30)
         if r.returncode == 0:
             return True, "Connected successfully."
-        return False, r.stderr.strip() or r.stdout.strip()
+        error = r.stderr.strip() or r.stdout.strip()
+        if _KEY_MGMT_ERROR in error:
+            # Malformed profile — delete and let nmcli create a clean one
+            current_app.logger.warning(
+                "key-mgmt error for '%s', deleting profile and retrying", ssid)
+
+            _run(["nmcli", "connection", "delete", ssid])
+            r2 = _run(cmd, timeout=30)
+            if r2.returncode == 0:
+                return True, "Connected successfully."
+            return False, r2.stderr.strip() or r2.stdout.strip()
+        return False, error
     except subprocess.TimeoutExpired:
         return False, "Connection timed out."
     except Exception as e:

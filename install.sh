@@ -263,11 +263,16 @@ echo -e "${GREEN}║        WiFi Proxy installed successfully!        ║${NC}"
 fi
 echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║${NC}  URL:      http://${LAN_IP}                   ${GREEN}║${NC}"
+if [[ "$_upgrading" == "0" ]]; then
 echo -e "${GREEN}║${NC}  Username: admin                              ${GREEN}║${NC}"
 echo -e "${GREEN}║${NC}  Password: admin  (CHANGE THIS IMMEDIATELY)  ${GREEN}║${NC}"
+fi
 echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║${NC}  Connect a device to eth0, then open         ${GREEN}║${NC}"
 echo -e "${GREEN}║${NC}  the URL above in a browser.                 ${GREEN}║${NC}"
+echo -e "${GREEN}╠══════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║${NC}  To upgrade later (network already set up):  ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}  ${YELLOW}git pull && sudo APP_ONLY=1 bash install.sh${NC}  ${GREEN}║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Service status : ${YELLOW}systemctl status wifiproxy${NC}"

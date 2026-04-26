@@ -5,6 +5,8 @@
 # Change www-data to whatever user runs the app (e.g. pi, wifiproxy)
 Cmnd_Alias WIFIPROXY_NM = \
     /usr/bin/nmcli dev wifi connect *, \
+    /usr/bin/nmcli dev wifi list *, \
+    /usr/bin/nmcli dev wifi rescan *, \
     /usr/bin/nmcli dev disconnect *, \
     /usr/bin/nmcli connection delete *, \
     /usr/bin/nmcli connection modify *, \
