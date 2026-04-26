@@ -126,18 +126,16 @@ def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool
     if bssid:
         cmd += ["bssid", bssid]
     try:
-        r = _run(cmd, timeout=30)
+        r = _sudo(cmd, timeout=30)
         if r.returncode == 0:
             return True, "Connected successfully."
         error = r.stderr.strip() or r.stdout.strip()
         if _KEY_MGMT_ERROR in error:
-            # Malformed profile — delete (needs sudo; system user has no polkit session)
-            # and let nmcli create a clean one on retry.
+            # Malformed profile — delete and let nmcli create a clean one on retry.
             current_app.logger.warning(
                 "key-mgmt error for '%s', deleting profile and retrying", ssid)
-
             _sudo(["nmcli", "connection", "delete", ssid])
-            r2 = _run(cmd, timeout=30)
+            r2 = _sudo(cmd, timeout=30)
             if r2.returncode == 0:
                 return True, "Connected successfully."
             return False, r2.stderr.strip() or r2.stdout.strip()
@@ -152,7 +150,7 @@ def disconnect() -> tuple[bool, str]:
     """Disconnect wlan0."""
     wan = current_app.config["WAN_INTERFACE"]
     try:
-        r = _run(["nmcli", "dev", "disconnect", wan])
+        r = _sudo(["nmcli", "dev", "disconnect", wan])
         return r.returncode == 0, (r.stderr or r.stdout).strip()
     except Exception as e:
         return False, str(e)
@@ -161,7 +159,7 @@ def disconnect() -> tuple[bool, str]:
 def forget_network(ssid: str) -> tuple[bool, str]:
     """Delete a saved NM connection by SSID."""
     try:
-        r = _run(["nmcli", "connection", "delete", ssid])
+        r = _sudo(["nmcli", "connection", "delete", ssid])
         return r.returncode == 0, (r.stderr or r.stdout).strip()
     except Exception as e:
         return False, str(e)
@@ -170,8 +168,8 @@ def forget_network(ssid: str) -> tuple[bool, str]:
 def set_nm_priority(ssid: str, priority: int) -> bool:
     """Set NetworkManager autoconnect priority for a saved connection."""
     try:
-        r = _run(["nmcli", "connection", "modify", ssid,
-                  "connection.autoconnect-priority", str(priority)])
+        r = _sudo(["nmcli", "connection", "modify", ssid,
+                   "connection.autoconnect-priority", str(priority)])
         return r.returncode == 0
     except Exception:
         return False
