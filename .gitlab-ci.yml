@@ -1,0 +1,30 @@
+default:
+  image: python:3.12-slim
+  tags:
+    - saas-linux-small-amd64
+
+stages:
+  - test
+
+.setup: &setup
+  cache:
+    key: pip-$CI_COMMIT_REF_SLUG
+    paths:
+      - .venv/
+  before_script:
+    - python -m venv .venv
+    - .venv/bin/pip install -q --upgrade pip
+    - .venv/bin/pip install -q -r requirements.txt
+    - .venv/bin/pip install -q pytest pylint
+
+test:
+  <<: *setup
+  stage: test
+  script:
+    - .venv/bin/pytest
+
+lint:
+  <<: *setup
+  stage: test
+  script:
+    - .venv/bin/pylint app/ config.py run.py --fail-under=8.0

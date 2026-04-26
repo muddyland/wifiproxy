@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}WiFi Networks{% endblock %}
+{% block page_title %}WiFi Networks{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Current connection -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa-solid fa-wifi me-2"></i>Current Connection</span>
+        {% if current.connected %}
+          <span class="badge bg-success">Connected</span>
+        {% else %}
+          <span class="badge bg-secondary">Disconnected</span>
+        {% endif %}
+      </div>
+      <div class="card-body d-flex flex-wrap align-items-center gap-3">
+        {% if current.connected %}
+          <div>
+            <p class="mb-0 fw-semibold fs-5">{{ current.ssid }}</p>
+            {% if current.ip %}<p class="mb-0 text-muted small">{{ current.ip }}</p>{% endif %}
+          </div>
+          {% if current.signal is not none %}
+            <div class="ms-auto d-flex align-items-center gap-2">
+              <span class="text-muted small">Signal</span>
+              <div class="progress" style="width:80px;height:6px">
+                <div class="progress-bar bg-success" style="width:{{ current.signal }}%"></div>
+              </div>
+              <span class="text-muted small">{{ current.signal }}%</span>
+            </div>
+          {% endif %}
+          <form method="post" action="{{ url_for('wifi.disconnect') }}" class="ms-auto">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">
+              <i class="fa-solid fa-plug-circle-xmark me-1"></i>Disconnect
+            </button>
+          </form>
+        {% else %}
+          <p class="text-muted mb-0">Not connected to any network. Connect to a saved network below.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Saved networks -->
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa-solid fa-list-ol me-2"></i>Saved Networks
+          <span class="badge bg-primary rounded-pill ms-1">{{ networks|length }}</span>
+        </span>
+        <span class="text-muted small" title="Drag rows to reprioritize">
+          <i class="fa-solid fa-grip-vertical me-1"></i>Drag to reorder
+        </span>
+      </div>
+      <div class="card-body p-0">
+        {% if networks %}
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width:24px"></th>
+                <th>SSID</th>
+                <th class="text-center">Priority</th>
+                <th class="text-center">Auto</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="network-list">
+              {% for net in networks %}
+              <tr data-id="{{ net.id }}">
+                <td class="drag-handle text-muted" style="cursor:grab"><i class="fa-solid fa-grip-vertical"></i></td>
+                <td>
+                  <span class="fw-semibold">{{ net.ssid }}</span>
+                  {% if net.hidden %}<span class="badge bg-secondary ms-1 small">hidden</span>{% endif %}
+                  {% if current.ssid == net.ssid and current.connected %}
+                    <span class="badge bg-success ms-1 small">active</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <span class="badge bg-primary rounded-pill">{{ net.priority }}</span>
+                </td>
+                <td class="text-center">
+                  {% if net.auto_connect %}
+                    <i class="fa-solid fa-check text-success"></i>
+                  {% else %}
+                    <i class="fa-solid fa-xmark text-secondary"></i>
+                  {% endif %}
+                </td>
+                <td class="text-end pe-3">
+                  <form method="post" action="{{ url_for('wifi.connect', network_id=net.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-success" title="Connect">
+                      <i class="fa-solid fa-plug"></i>
+                    </button>
+                  </form>
+                  <form method="post" action="{{ url_for('wifi.delete', network_id=net.id) }}" class="d-inline"
+                        onsubmit="return confirm('Remove {{ net.ssid }}?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger" title="Forget">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="text-center text-muted py-5">
+            <i class="fa-solid fa-wifi fa-2x mb-2"></i>
+            <p class="mb-0">No saved networks yet.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Add network + scan -->
+  <div class="col-12 col-lg-5">
+    <!-- Scan -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa-solid fa-magnifying-glass me-2"></i>Scan</span>
+        <button class="btn btn-sm btn-outline-primary" id="scan-btn">
+          <i class="fa-solid fa-rotate me-1"></i>Scan
+        </button>
+      </div>
+      <div class="card-body p-0" id="scan-results">
+        <p class="text-muted small text-center py-3 mb-0">Press Scan to search for networks.</p>
+      </div>
+    </div>
+
+    <!-- Add form -->
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="fa-solid fa-plus me-2"></i>Add / Update Network
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('wifi.add') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">SSID</label>
+            <input type="text" name="ssid" id="add-ssid" class="form-control" required
+                   autocomplete="off" maxlength="64">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Password</label>
+            <div class="input-group">
+              <input type="password" name="password" class="form-control add-password"
+                     autocomplete="new-password" maxlength="128">
+              <button class="btn btn-outline-secondary toggle-pw" type="button">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="form-label small fw-semibold">Priority</label>
+              <input type="number" name="priority" class="form-control" value="10" min="1" max="999">
+              <div class="form-text">Higher = preferred</div>
+            </div>
+            <div class="col">
+              <label class="form-label small fw-semibold">BSSID lock <span class="text-muted fw-normal">(optional)</span></label>
+              <input type="text" name="bssid" class="form-control" placeholder="AA:BB:CC:DD:EE:FF"
+                     pattern="([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}" maxlength="17">
+            </div>
+          </div>
+
+          <div class="d-flex gap-3 mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="hidden" id="hidden">
+              <label class="form-check-label small" for="hidden">Hidden network</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="connect_now" id="connect_now">
+              <label class="form-check-label small" for="connect_now">Connect now</label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="fa-solid fa-floppy-disk me-2"></i>Save Network
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Scan button
+document.getElementById('scan-btn').addEventListener('click', async function() {
+  const btn = this;
+  const results = document.getElementById('scan-results');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Scanning...';
+  results.innerHTML = '<p class="text-muted small text-center py-3 mb-0">Scanning...</p>';
+
+  try {
+    const res = await fetch("{{ url_for('wifi.scan') }}");
+    const networks = await res.json();
+    if (!networks.length) {
+      results.innerHTML = '<p class="text-muted small text-center py-3 mb-0">No networks found.</p>';
+      return;
+    }
+    let html = '<ul class="list-group list-group-flush">';
+    networks.forEach(n => {
+      const bars = n.signal > 66 ? 3 : n.signal > 33 ? 2 : 1;
+      const barIcons = Array.from({length: 3}, (_, i) =>
+        `<i class="fa-solid fa-signal" style="opacity:${i < bars ? 1 : 0.25}"></i>`
+      ).join('');
+      html += `<li class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
+        <div>
+          <span class="fw-semibold">${escHtml(n.ssid)}</span>
+          ${n.active ? '<span class="badge bg-success ms-1 small">active</span>' : ''}
+          <br><small class="text-muted">${escHtml(n.security)}</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted small">${barIcons}</span>
+          <button class="btn btn-sm btn-outline-primary use-ssid" data-ssid="${escAttr(n.ssid)}">Use</button>
+        </div>
+      </li>`;
+    });
+    html += '</ul>';
+    results.innerHTML = html;
+
+    results.querySelectorAll('.use-ssid').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('add-ssid').value = btn.dataset.ssid;
+        document.querySelector('.add-password').focus();
+      });
+    });
+  } catch(e) {
+    results.innerHTML = '<p class="text-danger small text-center py-3 mb-0">Scan failed.</p>';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate me-1"></i>Scan';
+  }
+});
+
+// Toggle password visibility
+document.querySelectorAll('.toggle-pw').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const input = this.previousElementSibling;
+    const icon = this.querySelector('i');
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+      input.type = 'password';
+      icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+  });
+});
+
+// Drag-to-reorder priorities
+const listEl = document.getElementById('network-list');
+if (listEl && typeof Sortable !== 'undefined') {
+  Sortable.create(listEl, {
+    handle: '.drag-handle',
+    animation: 150,
+    onEnd: async function() {
+      const ids = Array.from(listEl.querySelectorAll('tr[data-id]'))
+                       .map(r => parseInt(r.dataset.id));
+      await fetch("{{ url_for('wifi.update_priorities') }}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+        body: JSON.stringify({order: ids})
+      });
+      // Update displayed priority badges
+      ids.forEach((id, i) => {
+        const row = listEl.querySelector(`tr[data-id="${id}"]`);
+        if (row) row.querySelector('.badge.bg-primary').textContent = (ids.length - i) * 10;
+      });
+    }
+  });
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s) {
+  return String(s).replace(/"/g,'&quot;');
+}
+function getCsrf() {
+  return document.querySelector('input[name=csrf_token]')?.value || '';
+}
+</script>
+{% endblock %}

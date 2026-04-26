@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}WiFi Bridge{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/custom.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<div class="d-flex" id="app-wrapper">
+  <!-- Sidebar -->
+  <nav id="sidebar" class="d-flex flex-column flex-shrink-0 p-3">
+    <a href="{{ url_for('main.dashboard') }}" class="sidebar-brand d-flex align-items-center mb-4 text-decoration-none">
+      <i class="fa-solid fa-wifi me-2 fs-4"></i>
+      <span class="fw-semibold fs-5">WiFi Bridge</span>
+    </a>
+
+    <ul class="nav nav-pills flex-column mb-auto gap-1">
+      <li class="nav-item">
+        <a href="{{ url_for('main.dashboard') }}"
+           class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+          <i class="fa-solid fa-gauge-high nav-icon"></i> Dashboard
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{{ url_for('wifi.index') }}"
+           class="nav-link {% if request.blueprint == 'wifi' %}active{% endif %}">
+          <i class="fa-solid fa-wifi nav-icon"></i> WiFi Networks
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{{ url_for('dhcp.index') }}"
+           class="nav-link {% if request.blueprint == 'dhcp' %}active{% endif %}">
+          <i class="fa-solid fa-network-wired nav-icon"></i> DHCP / Bridge
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{{ url_for('tailscale.index') }}"
+           class="nav-link {% if request.blueprint == 'tailscale' %}active{% endif %}">
+          <i class="fa-solid fa-shield-halved nav-icon"></i> Tailscale
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{{ url_for('system.index') }}"
+           class="nav-link {% if request.blueprint == 'system' %}active{% endif %}">
+          <i class="fa-solid fa-server nav-icon"></i> System
+        </a>
+      </li>
+    </ul>
+
+    <div class="mt-auto pt-3 border-top border-secondary">
+      <a href="{{ url_for('auth.logout') }}" class="nav-link text-danger-emphasis">
+        <i class="fa-solid fa-right-from-bracket nav-icon"></i> Logout
+      </a>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <div id="main-content" class="flex-grow-1 overflow-auto">
+    <!-- Top bar -->
+    <header class="top-bar px-4 py-3 d-flex align-items-center justify-content-between">
+      <button class="btn btn-sm btn-outline-secondary d-lg-none" id="sidebar-toggle">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <h1 class="h5 mb-0 fw-semibold text-body">{% block page_title %}Dashboard{% endblock %}</h1>
+      <span class="text-muted small">{{ current_user.username }}</span>
+    </header>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="px-4 pt-2">
+          {% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+              {{ msg }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="p-4">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

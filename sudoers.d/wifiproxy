@@ -1,0 +1,42 @@
+# Sudoers rules for the wifiproxy web application.
+# Install with: sudo cp sudoers.d/wifiproxy /etc/sudoers.d/wifiproxy
+# Then: sudo chmod 440 /etc/sudoers.d/wifiproxy && sudo visudo -c
+
+# Change www-data to whatever user runs the app (e.g. pi, wifiproxy)
+Cmnd_Alias WIFIPROXY_NM = \
+    /usr/bin/nmcli dev wifi connect *, \
+    /usr/bin/nmcli dev disconnect *, \
+    /usr/bin/nmcli connection delete *, \
+    /usr/bin/nmcli connection modify *, \
+    /usr/bin/nmcli connection up *
+
+Cmnd_Alias WIFIPROXY_DHCP = \
+    /usr/bin/tee /etc/dnsmasq.conf, \
+    /usr/bin/systemctl restart dnsmasq, \
+    /usr/bin/systemctl start dnsmasq, \
+    /usr/bin/systemctl stop dnsmasq
+
+Cmnd_Alias WIFIPROXY_IPTABLES = \
+    /usr/sbin/iptables *, \
+    /usr/sbin/netfilter-persistent save, \
+    /usr/sbin/netfilter-persistent reload
+
+Cmnd_Alias WIFIPROXY_SYSTEM = \
+    /usr/bin/hostnamectl set-hostname *, \
+    /usr/bin/apt-get update *, \
+    /usr/bin/apt-get upgrade *, \
+    /usr/bin/systemctl reboot, \
+    /usr/bin/systemctl poweroff
+
+Cmnd_Alias WIFIPROXY_TAILSCALE = \
+    /usr/bin/tailscale up *, \
+    /usr/bin/tailscale down, \
+    /usr/bin/tailscale logout, \
+    /usr/bin/tailscale status *
+
+www-data ALL=(root) NOPASSWD: \
+    WIFIPROXY_NM, \
+    WIFIPROXY_DHCP, \
+    WIFIPROXY_IPTABLES, \
+    WIFIPROXY_SYSTEM, \
+    WIFIPROXY_TAILSCALE

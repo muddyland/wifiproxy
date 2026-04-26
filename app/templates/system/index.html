@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}System{% endblock %}
+{% block page_title %}System{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- System Info -->
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="fa-brands fa-raspberry-pi me-2"></i>System Info
+      </div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between">
+          <span class="text-muted">Hostname</span>
+          <span class="fw-semibold font-monospace">{{ info.hostname or "—" }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <span class="text-muted">Uptime</span>
+          <span>{{ info.uptime or "—" }}</span>
+        </li>
+        {% if info.cpu_temp %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span class="text-muted">CPU Temp</span>
+          <span class="{% if info.cpu_temp|float > 75 %}text-danger{% elif info.cpu_temp|float > 65 %}text-warning{% else %}text-success{% endif %}">
+            {{ info.cpu_temp }}°C
+          </span>
+        </li>
+        {% endif %}
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">CPU</span>
+            <span>{{ info.cpu_percent }}%</span>
+          </div>
+          <div class="progress" style="height:5px">
+            <div class="progress-bar {% if info.cpu_percent > 80 %}bg-danger{% elif info.cpu_percent > 60 %}bg-warning{% else %}bg-primary{% endif %}"
+                 style="width:{{ info.cpu_percent }}%"></div>
+          </div>
+        </li>
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">Memory</span>
+            <span>{{ info.memory_used_mb }}MB / {{ info.memory_total_mb }}MB</span>
+          </div>
+          <div class="progress" style="height:5px">
+            <div class="progress-bar {% if info.memory_percent > 80 %}bg-danger{% elif info.memory_percent > 60 %}bg-warning{% else %}bg-primary{% endif %}"
+                 style="width:{{ info.memory_percent }}%"></div>
+          </div>
+        </li>
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted">Disk</span>
+            <span>{{ info.disk_used_gb }}GB / {{ info.disk_total_gb }}GB</span>
+          </div>
+          <div class="progress" style="height:5px">
+            <div class="progress-bar {% if info.disk_percent > 80 %}bg-danger{% elif info.disk_percent > 60 %}bg-warning{% else %}bg-primary{% endif %}"
+                 style="width:{{ info.disk_percent }}%"></div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Hostname -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="fa-solid fa-tag me-2"></i>Hostname
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('system.set_hostname') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="input-group">
+            <input type="text" name="hostname" class="form-control font-monospace"
+                   value="{{ info.hostname }}" required
+                   pattern="[a-zA-Z0-9\-]{1,63}"
+                   maxlength="63">
+            <button class="btn btn-outline-primary">Apply</button>
+          </div>
+          <div class="form-text">Letters, numbers, and hyphens only.</div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Power -->
+    <div class="card shadow-sm border-danger">
+      <div class="card-header fw-semibold text-danger">
+        <i class="fa-solid fa-power-off me-2"></i>Power
+      </div>
+      <div class="card-body d-flex gap-2">
+        <form method="post" action="{{ url_for('system.reboot') }}"
+              onsubmit="return confirm('Reboot the Pi?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline-warning">
+            <i class="fa-solid fa-rotate-right me-1"></i>Reboot
+          </button>
+        </form>
+        <form method="post" action="{{ url_for('system.shutdown') }}"
+              onsubmit="return confirm('Shut down the Pi? You will need physical access to restart.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline-danger">
+            <i class="fa-solid fa-power-off me-1"></i>Shutdown
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <!-- Updates -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="fa-solid fa-box-archive me-2"></i>Updates
+      </div>
+      <div class="card-body">
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <button class="btn btn-outline-secondary btn-sm" id="check-updates-btn">
+            <i class="fa-solid fa-magnifying-glass me-1"></i>Check for Updates
+          </button>
+          <form method="post" action="{{ url_for('system.update') }}"
+                onsubmit="return confirm('Run apt-get upgrade? This may take a few minutes.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-primary btn-sm">
+              <i class="fa-solid fa-arrow-up me-1"></i>Update System
+            </button>
+          </form>
+        </div>
+        <div id="update-status" class="text-muted small"></div>
+      </div>
+    </div>
+
+    <!-- Change password -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="fa-solid fa-key me-2"></i>Change Admin Password
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('auth.change_password') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Current Password</label>
+            <input type="password" name="current_password" class="form-control"
+                   autocomplete="current-password" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">New Password</label>
+            <input type="password" name="new_password" class="form-control"
+                   autocomplete="new-password" required minlength="8">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Confirm New Password</label>
+            <input type="password" name="confirm_password" class="form-control"
+                   autocomplete="new-password" required minlength="8">
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk me-2"></i>Update Password
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Logs -->
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa-solid fa-scroll me-2"></i>System Logs</span>
+        <div class="d-flex gap-2 align-items-center">
+          <select id="log-lines" class="form-select form-select-sm" style="width:auto">
+            <option value="50">50 lines</option>
+            <option value="100" selected>100 lines</option>
+            <option value="200">200 lines</option>
+            <option value="500">500 lines</option>
+          </select>
+          <button class="btn btn-sm btn-outline-secondary" id="refresh-logs">
+            <i class="fa-solid fa-rotate"></i>
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <pre id="log-output" class="log-box mb-0 p-3 small">Press refresh to load logs.</pre>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('check-updates-btn').addEventListener('click', async function() {
+  const btn = this;
+  const status = document.getElementById('update-status');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Checking...';
+  status.textContent = '';
+  try {
+    const r = await fetch("{{ url_for('system.check_updates') }}");
+    const d = await r.json();
+    status.textContent = d.message;
+  } catch(e) {
+    status.textContent = 'Failed to check.';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-magnifying-glass me-1"></i>Check for Updates';
+});
+
+async function loadLogs() {
+  const lines = document.getElementById('log-lines').value;
+  const output = document.getElementById('log-output');
+  output.textContent = 'Loading...';
+  try {
+    const r = await fetch(`{{ url_for('system.logs') }}?lines=${lines}`);
+    const d = await r.json();
+    output.textContent = d.logs || '(empty)';
+    output.scrollTop = output.scrollHeight;
+  } catch(e) {
+    output.textContent = 'Failed to load logs.';
+  }
+}
+
+document.getElementById('refresh-logs').addEventListener('click', loadLogs);
+</script>
+{% endblock %}

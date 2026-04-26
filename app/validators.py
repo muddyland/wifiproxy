@@ -1,0 +1,109 @@
+"""Input validation helpers. All user-supplied values that reach subprocess
+commands must pass through these before use."""
+
+import ipaddress
+import re
+from urllib.parse import urlparse
+
+# Interfaces: alphanumeric + underscore/hyphen, max 15 chars (Linux IFNAMSIZ-1)
+_IFACE_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,15}$')
+# Hostname: RFC-952/1123
+_HOSTNAME_RE = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$')
+# BSSID: standard MAC address notation
+_BSSID_RE = re.compile(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+
+
+class ValidationError(ValueError):
+    pass
+
+
+def validate_ip(value: str, field: str = "IP address") -> str:
+    try:
+        ipaddress.IPv4Address(value.strip())
+        return value.strip()
+    except ValueError as exc:
+        raise ValidationError(
+            f"{field}: '{value}' is not a valid IPv4 address."
+        ) from exc
+
+
+def validate_interface(value: str, field: str = "Interface") -> str:
+    value = value.strip()
+    if not _IFACE_RE.match(value):
+        raise ValidationError(f"{field}: '{value}' is not a valid interface name.")
+    return value
+
+
+def validate_hostname(value: str) -> str:
+    value = value.strip()
+    if not _HOSTNAME_RE.match(value):
+        raise ValidationError(
+            f"Hostname '{value}' is invalid. Use letters, numbers, and hyphens only."
+        )
+    return value
+
+
+def validate_ssid(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValidationError("SSID cannot be empty.")
+    if len(value) > 32:
+        raise ValidationError("SSID must be 32 characters or fewer.")
+    return value
+
+
+def validate_bssid(value: str) -> str:
+    value = value.strip().upper()
+    if not _BSSID_RE.match(value):
+        raise ValidationError(f"BSSID '{value}' must be in AA:BB:CC:DD:EE:FF format.")
+    return value
+
+
+def validate_url(value: str, field: str = "URL") -> str:
+    value = value.strip()
+    try:
+        parsed = urlparse(value)
+        if parsed.scheme not in ("http", "https"):
+            raise ValidationError(f"{field}: must start with http:// or https://")
+        if not parsed.netloc:
+            raise ValidationError(f"{field}: missing host.")
+        # Reject URLs with shell-special characters (extra safety belt)
+        bad_chars = set(';|&`$(){}[]<>\\\'"\n\r\t')
+        if any(c in value for c in bad_chars):
+            raise ValidationError(f"{field}: contains invalid characters.")
+        return value
+    except ValidationError:
+        raise
+    except Exception as exc:
+        raise ValidationError(f"{field}: '{value}' is not a valid URL.") from exc
+
+
+def validate_cidr_list(value: str) -> str:
+    """Validate comma-separated CIDR list (e.g. '192.168.50.0/24,10.0.0.0/8')."""
+    value = value.strip()
+    if not value:
+        return value
+    for part in value.split(","):
+        part = part.strip()
+        try:
+            ipaddress.IPv4Network(part, strict=False)
+        except ValueError as exc:
+            raise ValidationError(f"'{part}' is not a valid CIDR network.") from exc
+    return value
+
+
+def validate_priority(value) -> int:
+    try:
+        p = int(value)
+        if not 1 <= p <= 9999:
+            raise ValueError("out of range")
+        return p
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("Priority must be an integer between 1 and 9999.") from exc
+
+
+def validate_lease_time(value: str) -> str:
+    allowed = {"1h", "6h", "12h", "24h", "48h"}
+    if value not in allowed:
+        raise ValidationError(f"Lease time must be one of: {', '.join(sorted(allowed))}.")
+    return value

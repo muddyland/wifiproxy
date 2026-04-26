@@ -1,0 +1,30 @@
+[MESSAGES CONTROL]
+disable=
+    # Docstrings — intentionally omitted per project convention
+    C0114, C0115, C0116,
+    # SQLAlchemy generates members dynamically (query, session, Column, etc.)
+    E1101,
+    # Models and blueprint inits intentionally have few public methods
+    R0903,
+    # _password / _auth_key are intentional private column aliases in models
+    W0212,
+    # Flask blueprint __init__.py must import routes after creating the Blueprint
+    # object to avoid circular imports — this is the standard Flask pattern.
+    # Flask app factory imports blueprints inside create_app() for the same reason.
+    C0413, C0415,
+    # Flask blueprint circular imports are a known false positive for this pattern
+    R0401,
+    # subprocess.run returncode is always checked manually; check=True would
+    # raise on non-zero exit which we handle ourselves for user-facing messages
+    W1510,
+    # All broad Exception catches in utils are intentional: subprocess calls to
+    # external system tools can fail in unpredictable ways and must not crash
+    # the web server. Each catch logs the error before returning a safe default.
+    W0718
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+# Flask route handlers can accumulate args via form fields
+max-args=8
