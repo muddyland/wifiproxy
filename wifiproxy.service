@@ -1,11 +1,11 @@
 [Unit]
-Description=WiFi Bridge Web UI
-After=network-online.target
+Description=WiFi Proxy Web UI
+After=network-online.target dnsmasq.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=www-data
+User=wifiproxy
 WorkingDirectory=/opt/wifiproxy
 Environment="BIND_HOST=192.168.50.1"
 Environment="PORT=80"
@@ -14,8 +14,11 @@ ExecStart=/opt/wifiproxy/venv/bin/python run.py
 Restart=on-failure
 RestartSec=5
 
-# Harden the service process
-NoNewPrivileges=yes
+# Allow binding to port 80 as a non-root user.
+# AmbientCapabilities and NoNewPrivileges=yes are mutually exclusive —
+# the capability must be ambient (inherited), not elevated.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 PrivateTmp=yes
 
 [Install]

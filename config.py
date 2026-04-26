@@ -13,6 +13,8 @@ class Config:
     LAN_INTERFACE = os.environ.get("LAN_INTERFACE", "eth0")
     NM_LAN_CONNECTION = os.environ.get("NM_LAN_CONNECTION", "Ethernet-Share")
 
+    RATELIMIT_STORAGE_URI = "memory://"
+
     DNSMASQ_CONF = "/etc/dnsmasq.conf"
     DNSMASQ_LEASES = "/var/lib/dnsmasq/dnsmasq.leases"
     IPTABLES_RULES_V4 = "/etc/iptables/rules.v4"

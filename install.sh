@@ -236,7 +236,8 @@ Environment="SECRET_KEY=${SECRET_KEY}"
 ExecStart=${APP_DIR}/venv/bin/python run.py
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=yes
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 PrivateTmp=yes
 
 [Install]
