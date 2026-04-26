@@ -2,8 +2,6 @@ import subprocess
 from typing import Optional
 from flask import current_app
 
-_KEY_MGMT_ERROR = "key-mgmt"
-
 
 def _run(cmd: list, timeout: int = 30) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
@@ -113,11 +111,26 @@ def get_current_connection() -> dict:
     return result
 
 
+def _delete_nm_profile_for_ssid(ssid: str) -> None:
+    """Delete any NM connection whose SSID field matches, regardless of profile name."""
+    try:
+        r = _run(["nmcli", "--terse", "--escape", "no",
+                  "-f", "NAME,802-11-wireless.ssid", "connection", "show"])
+        for line in r.stdout.splitlines():
+            name, _, conn_ssid = line.partition(":")
+            if conn_ssid.strip() == ssid:
+                _sudo(["nmcli", "connection", "delete", name.strip()])
+    except Exception:
+        pass
+
+
 def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool, str]:
     """Connect to a WiFi network via nmcli.
 
-    If the existing NM connection profile is malformed (missing key-mgmt),
-    delete it and retry so nmcli creates a fresh, correct profile.
+    Any existing NM profile for this SSID is removed first so that nmcli
+    always creates a fresh, correctly-structured profile.  This avoids
+    'key-mgmt: property is missing' errors from profiles created by other
+    tools or earlier installs.
     """
     wan = current_app.config["WAN_INTERFACE"]
     cmd = ["nmcli", "dev", "wifi", "connect", ssid, "ifname", wan]
@@ -126,20 +139,11 @@ def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool
     if bssid:
         cmd += ["bssid", bssid]
     try:
+        _delete_nm_profile_for_ssid(ssid)
         r = _sudo(cmd, timeout=30)
         if r.returncode == 0:
             return True, "Connected successfully."
-        error = r.stderr.strip() or r.stdout.strip()
-        if _KEY_MGMT_ERROR in error:
-            # Malformed profile — delete and let nmcli create a clean one on retry.
-            current_app.logger.warning(
-                "key-mgmt error for '%s', deleting profile and retrying", ssid)
-            _sudo(["nmcli", "connection", "delete", ssid])
-            r2 = _sudo(cmd, timeout=30)
-            if r2.returncode == 0:
-                return True, "Connected successfully."
-            return False, r2.stderr.strip() or r2.stdout.strip()
-        return False, error
+        return False, r.stderr.strip() or r.stdout.strip()
     except subprocess.TimeoutExpired:
         return False, "Connection timed out."
     except Exception as e:
