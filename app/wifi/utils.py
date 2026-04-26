@@ -112,14 +112,29 @@ def get_current_connection() -> dict:
 
 
 def _delete_nm_profile_for_ssid(ssid: str) -> None:
-    """Delete any NM connection whose SSID field matches, regardless of profile name."""
+    """Delete any NM wifi connection whose SSID matches, regardless of profile name.
+
+    nmcli list mode doesn't populate 802-11-wireless.ssid, so we get each
+    wifi profile's SSID via an individual 'connection show <name>' query.
+    Also tries a direct delete-by-name first as the fast path.
+    """
+    # Fast path: profile name usually equals the SSID
+    _sudo(["nmcli", "connection", "delete", ssid])
+
+    # Slow path: find profiles whose connection name differs from the SSID
     try:
-        r = _sudo(["nmcli", "--terse", "--escape", "no",
-                   "-f", "NAME,802-11-wireless.ssid", "connection", "show"])
+        r = _sudo(["nmcli", "--terse", "-f", "NAME,TYPE", "connection", "show"])
         for line in r.stdout.splitlines():
-            name, _, conn_ssid = line.partition(":")
-            if conn_ssid.strip() == ssid:
-                _sudo(["nmcli", "connection", "delete", name.strip()])
+            parts = line.rsplit(":", 1)
+            if len(parts) != 2 or "wireless" not in parts[1]:
+                continue
+            name = parts[0]
+            if name == ssid:
+                continue  # already deleted above
+            r2 = _sudo(["nmcli", "--terse", "--escape", "no",
+                        "-f", "802-11-wireless.ssid", "connection", "show", name])
+            if r2.stdout.strip() == ssid:
+                _sudo(["nmcli", "connection", "delete", name])
     except Exception:
         pass
 
