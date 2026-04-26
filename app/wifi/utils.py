@@ -114,8 +114,8 @@ def get_current_connection() -> dict:
 def _delete_nm_profile_for_ssid(ssid: str) -> None:
     """Delete any NM connection whose SSID field matches, regardless of profile name."""
     try:
-        r = _run(["nmcli", "--terse", "--escape", "no",
-                  "-f", "NAME,802-11-wireless.ssid", "connection", "show"])
+        r = _sudo(["nmcli", "--terse", "--escape", "no",
+                   "-f", "NAME,802-11-wireless.ssid", "connection", "show"])
         for line in r.stdout.splitlines():
             name, _, conn_ssid = line.partition(":")
             if conn_ssid.strip() == ssid:
