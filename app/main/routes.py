@@ -1,3 +1,4 @@
+import psutil
 from flask import render_template, jsonify
 from flask_login import login_required
 from app.main import bp
@@ -34,3 +35,27 @@ def api_stats():
 @login_required
 def api_logs():
     return jsonify({"logs": sys_utils.get_logs(lines=30, unit="wifiproxy")})
+
+
+@bp.route("/api/traffic")
+@login_required
+def api_traffic():
+    counters = psutil.net_io_counters(pernic=True)
+    result = {}
+    for iface in ["wlan0", "eth0"]:
+        c = counters.get(iface)
+        if c:
+            result[iface] = {"rx": c.bytes_recv, "tx": c.bytes_sent}
+    return jsonify(result)
+
+
+@bp.route("/api/services")
+@login_required
+def api_services():
+    return jsonify(sys_utils.get_service_statuses())
+
+
+@bp.route("/api/leases")
+@login_required
+def api_leases():
+    return jsonify(dhcp_utils.get_leases())

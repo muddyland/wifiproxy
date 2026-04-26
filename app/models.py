@@ -69,3 +69,10 @@ class TailscaleConfig(db.Model):
     @auth_key.setter
     def auth_key(self, value):
         self._auth_key = encrypt(value) if value else None
+
+
+class DhcpReservation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    mac = db.Column(db.String(17), unique=True, nullable=False)
+    nickname = db.Column(db.String(64), default="")
+    static_ip = db.Column(db.String(15), default="")

@@ -133,7 +133,7 @@
     </div>
   </div>
 
-  <!-- Actions + Leases -->
+  <!-- Actions -->
   <div class="col-12 col-lg-6">
     <div class="card shadow-sm mb-4">
       <div class="card-header fw-semibold">
@@ -149,70 +149,119 @@
         <p class="text-muted small mb-0">Use this if iptables rules were lost after a reboot or interface change.</p>
       </div>
     </div>
+  </div>
 
-    <!-- DHCP Leases -->
+  <!-- Active Leases -->
+  <div class="col-12">
     <div class="card shadow-sm">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="fa-solid fa-users me-2"></i>Active Leases</span>
-        <button class="btn btn-sm btn-outline-secondary" id="refresh-leases">
-          <i class="fa-solid fa-rotate"></i>
-        </button>
+        <span class="badge bg-secondary rounded-pill">{{ leases|length }}</span>
       </div>
-      <div id="leases-container">
-        {% if leases %}
+      {% if leases %}
+        <div class="table-responsive">
           <table class="table table-sm table-hover mb-0 align-middle">
-            <thead class="table-light">
+            <thead>
               <tr>
-                <th>IP Address</th>
+                <th class="ps-3">IP Address</th>
+                <th>Nickname</th>
                 <th>Hostname</th>
                 <th>MAC</th>
+                <th>Static IP</th>
+                <th class="text-end pe-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for lease in leases %}
               <tr>
-                <td class="font-monospace">{{ lease.ip }}</td>
-                <td>{{ lease.hostname or "—" }}</td>
+                <td class="font-monospace ps-3">{{ lease.ip }}</td>
+                <td>{{ lease.nickname or '—' }}</td>
+                <td>{{ lease.hostname or '—' }}</td>
                 <td class="font-monospace text-muted small">{{ lease.mac }}</td>
+                <td class="font-monospace small">{{ lease.static_ip or '—' }}</td>
+                <td class="text-end pe-3">
+                  <button class="btn btn-sm btn-outline-secondary btn-edit-res"
+                          data-bs-toggle="modal" data-bs-target="#resModal"
+                          data-mac="{{ lease.mac }}"
+                          data-nickname="{{ lease.nickname or '' }}"
+                          data-static-ip="{{ lease.static_ip or '' }}"
+                          title="Edit reservation">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  {% if lease.reservation_id %}
+                  <form method="post" action="{{ url_for('dhcp.delete_reservation', res_id=lease.reservation_id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-warning" title="Clear reservation"><i class="fa-solid fa-eraser"></i></button>
+                  </form>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('dhcp.invalidate_lease_route') }}" class="d-inline"
+                        onsubmit="return confirm('Invalidate lease for {{ lease.ip }}?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="ip" value="{{ lease.ip }}">
+                    <button class="btn btn-sm btn-outline-danger" title="Invalidate lease"><i class="fa-solid fa-ban"></i></button>
+                  </form>
+                </td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
-        {% else %}
-          <div class="text-center text-muted py-4">
-            <i class="fa-solid fa-user-slash fa-2x mb-2"></i>
-            <p class="mb-0 small">No active leases.</p>
-          </div>
-        {% endif %}
-      </div>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="fa-solid fa-user-slash fa-2x mb-2"></i>
+          <p class="mb-0 small">No active leases.</p>
+        </div>
+      {% endif %}
     </div>
   </div>
 
+</div>
+
+<!-- Reservation modal -->
+<div class="modal fade" id="resModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-pen-to-square me-2"></i>Edit Reservation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('dhcp.save_reservation') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">MAC Address</label>
+            <input type="text" name="mac" id="res-mac" class="form-control font-monospace" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Nickname</label>
+            <input type="text" name="nickname" id="res-nickname" class="form-control" maxlength="64" placeholder="e.g. John's Laptop">
+          </div>
+          <div class="mb-0">
+            <label class="form-label small fw-semibold">Static IP <span class="text-muted fw-normal">(optional)</span></label>
+            <input type="text" name="static_ip" id="res-static-ip" class="form-control font-monospace" placeholder="192.168.50.x" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}">
+            <div class="form-text">Leave empty for dynamic assignment.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.getElementById('refresh-leases').addEventListener('click', async function() {
-  const btn = this;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-  try {
-    const r = await fetch("{{ url_for('dhcp.leases_json') }}");
-    const leases = await r.json();
-    const container = document.getElementById('leases-container');
-    if (!leases.length) {
-      container.innerHTML = '<div class="text-center text-muted py-4"><i class="fa-solid fa-user-slash fa-2x mb-2"></i><p class="mb-0 small">No active leases.</p></div>';
-      return;
-    }
-    let html = '<table class="table table-sm table-hover mb-0 align-middle"><thead class="table-light"><tr><th>IP</th><th>Hostname</th><th>MAC</th></tr></thead><tbody>';
-    leases.forEach(l => {
-      html += `<tr><td class="font-monospace">${escHtml(l.ip)}</td><td>${escHtml(l.hostname||'—')}</td><td class="font-monospace text-muted small">${escHtml(l.mac)}</td></tr>`;
-    });
-    html += '</tbody></table>';
-    container.innerHTML = html;
-  } catch(e) { /* ignore */ }
-  finally { btn.innerHTML = '<i class="fa-solid fa-rotate"></i>'; }
+document.querySelectorAll('.btn-edit-res').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('res-mac').value = btn.dataset.mac;
+    document.getElementById('res-nickname').value = btn.dataset.nickname || '';
+    document.getElementById('res-static-ip').value = btn.dataset.staticIp || '';
+  });
 });
+
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 {% endblock %}

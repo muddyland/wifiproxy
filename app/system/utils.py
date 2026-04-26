@@ -133,3 +133,21 @@ def shutdown() -> tuple[bool, str]:
         return True, "Shutting down..."
     except Exception as e:
         return False, str(e)
+
+
+_MONITORED_SERVICES = ["wifiproxy", "dnsmasq", "NetworkManager", "netfilter-persistent", "tailscaled"]
+
+
+def get_service_statuses() -> list[dict]:
+    results = []
+    for svc in _MONITORED_SERVICES:
+        try:
+            r = subprocess.run(
+                ["systemctl", "is-active", svc],
+                capture_output=True, text=True, encoding="utf-8", timeout=5
+            )
+            state = r.stdout.strip()
+        except Exception:
+            state = "unknown"
+        results.append({"name": svc, "state": state, "active": state == "active"})
+    return results

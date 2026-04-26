@@ -31,7 +31,7 @@ def get_bridge_status() -> dict:
 
 
 def get_leases() -> list[dict]:
-    """Parse the dnsmasq leases file."""
+    """Parse the dnsmasq leases file, enriched with reservation data."""
     leases_path = current_app.config["DNSMASQ_LEASES"]
     leases: list[dict] = []
     try:
@@ -49,6 +49,19 @@ def get_leases() -> list[dict]:
         pass
     except Exception as exc:  # noqa: BLE001
         current_app.logger.error("get_leases error: %s", exc)
+    try:
+        from app.models import DhcpReservation
+        reservations = {r.mac.lower(): r for r in DhcpReservation.query.all()}
+        for lease in leases:
+            r = reservations.get(lease["mac"].lower())
+            lease["nickname"] = r.nickname if r else ""
+            lease["static_ip"] = r.static_ip if r else ""
+            lease["reservation_id"] = r.id if r else None
+    except Exception:
+        for lease in leases:
+            lease.setdefault("nickname", "")
+            lease.setdefault("static_ip", "")
+            lease.setdefault("reservation_id", None)
     return leases
 
 
@@ -62,6 +75,12 @@ def write_dnsmasq_config(cfg) -> tuple[bool, str]:
         f"dhcp-option=option:dns-server,{cfg.dns1},{cfg.dns2}\n"
         f"dhcp-leasefile=/var/lib/dnsmasq/dnsmasq.leases\n"
     )
+    from app.models import DhcpReservation
+    for res in DhcpReservation.query.filter(DhcpReservation.static_ip != "").all():
+        line = f"dhcp-host={res.mac},{res.static_ip}"
+        if res.nickname:
+            line += f",{res.nickname}"
+        conf += line + "\n"
     conf_path = current_app.config["DNSMASQ_CONF"]
     try:
         r = subprocess.run(
@@ -95,6 +114,23 @@ def update_lan_ip(connection_name: str, new_gateway: str) -> tuple[bool, str]:
         return r2.returncode == 0, (r2.stderr or r2.stdout).strip()
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+
+
+def invalidate_lease(ip: str) -> tuple[bool, str]:
+    """Remove a specific IP lease from the leases file and restart dnsmasq."""
+    leases_path = current_app.config["DNSMASQ_LEASES"]
+    try:
+        content = Path(leases_path).read_text(encoding="utf-8")
+        lines = [ln for ln in content.splitlines() if not (len(ln.split()) >= 3 and ln.split()[2] == ip)]
+        new_content = "\n".join(lines) + ("\n" if lines else "")
+        r = subprocess.run(["sudo", "tee", leases_path], input=new_content,
+                           capture_output=True, text=True, encoding="utf-8")
+        if r.returncode != 0:
+            return False, r.stderr.strip()
+        r2 = _sudo(["systemctl", "restart", "dnsmasq"])
+        return r2.returncode == 0, "Lease invalidated." if r2.returncode == 0 else r2.stderr.strip()
+    except Exception as e:
+        return False, str(e)
 
 
 def apply_iptables(wan: str, lan: str) -> tuple[bool, str]:

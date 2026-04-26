@@ -5,6 +5,8 @@
 {% block content %}
 <div class="row g-4">
 
+  <!-- Row 1: Stat cards -->
+
   <!-- WiFi -->
   <div class="col-12 col-md-6 col-xl-3">
     <div class="card h-100 shadow-sm">
@@ -148,7 +150,47 @@
     </div>
   </div>
 
-  <!-- Service Logs -->
+  <!-- Row 2: Traffic graphs -->
+  <div class="col-12 col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold"><i class="fa-solid fa-arrow-right-arrow-left me-2"></i>WAN (wlan0)</div>
+      <div class="card-body py-2"><div class="traffic-chart-wrap"><canvas id="wan-chart"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold"><i class="fa-solid fa-ethernet me-2"></i>LAN (eth0)</div>
+      <div class="card-body py-2"><div class="traffic-chart-wrap"><canvas id="lan-chart"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- Row 3: Services + DHCP leases -->
+  <div class="col-12 col-md-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa-solid fa-server me-2"></i>Services</span>
+        <span class="text-muted small" id="svc-updated"></span>
+      </div>
+      <div class="card-body p-0" id="svc-list">
+        <div class="text-muted small text-center py-3">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa-solid fa-users me-2"></i>DHCP Leases
+          <span class="badge bg-secondary rounded-pill ms-1" id="lease-count">0</span>
+        </span>
+        <a href="{{ url_for('dhcp.index') }}" class="btn btn-sm btn-outline-secondary">Manage</a>
+      </div>
+      <div class="card-body p-0" id="lease-list">
+        <div class="text-muted small text-center py-3">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: Service logs -->
   <div class="col-12">
     <div class="card shadow-sm">
       <div class="card-header d-flex justify-content-between align-items-center">
@@ -166,45 +208,140 @@
 
 {% block scripts %}
 <script>
-function barClass(p) {
-  return p > 80 ? 'bg-danger' : p > 60 ? 'bg-warning' : 'bg-primary';
-}
-
+// ── Utilities ──────────────────────────────────────────
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function barClass(p) { return p > 80 ? 'bg-danger' : p > 60 ? 'bg-warning' : 'bg-primary'; }
 function setBar(barId, pctId, pct) {
-  const bar = document.getElementById(barId);
-  const lbl = document.getElementById(pctId);
-  if (bar) { bar.style.width = pct + '%'; bar.className = 'progress-bar ' + barClass(pct); }
-  if (lbl) lbl.textContent = pct + '%';
+  const bar = document.getElementById(barId), lbl = document.getElementById(pctId);
+  if (bar) { bar.style.width = pct+'%'; bar.className = 'progress-bar '+barClass(pct); }
+  if (lbl) lbl.textContent = pct+'%';
 }
 
+// ── Traffic charts ─────────────────────────────────────
+const CHART_PTS = 30;
+function fmtBps(v) {
+  if (v >= 1048576) return (v/1048576).toFixed(1)+' MB/s';
+  if (v >= 1024) return (v/1024).toFixed(1)+' KB/s';
+  return Math.round(v)+' B/s';
+}
+function makeTrafficChart(id) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array(CHART_PTS).fill(''),
+      datasets: [
+        {label:'RX', data:Array(CHART_PTS).fill(null), borderColor:'#0d9e6e', backgroundColor:'rgba(13,158,110,0.12)', fill:true, tension:0.4, borderWidth:1.5, pointRadius:0},
+        {label:'TX', data:Array(CHART_PTS).fill(null), borderColor:'#fd7e14', backgroundColor:'rgba(253,126,20,0.12)', fill:true, tension:0.4, borderWidth:1.5, pointRadius:0},
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:false,
+      scales: {
+        y:{beginAtZero:true, ticks:{callback:fmtBps, maxTicksLimit:4, font:{size:10}}, grid:{color:'rgba(128,128,128,0.1)'}},
+        x:{display:false}
+      },
+      plugins: {
+        legend:{position:'bottom', labels:{boxWidth:10, font:{size:10}, padding:8}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtBps(c.raw)}}
+      }
+    }
+  });
+}
+const wanChart = makeTrafficChart('wan-chart');
+const lanChart = makeTrafficChart('lan-chart');
+let prevT=null, prevTs=null;
+async function refreshTraffic() {
+  try {
+    const d = await fetch("{{ url_for('main.api_traffic') }}").then(r=>r.json());
+    const now = Date.now();
+    if (prevT && prevTs) {
+      const dt = (now-prevTs)/1000;
+      function push(chart, curr, prev) {
+        if(!chart||!curr||!prev) return;
+        const rx=Math.max(0,(curr.rx-prev.rx)/dt), tx=Math.max(0,(curr.tx-prev.tx)/dt);
+        chart.data.datasets[0].data.push(rx); chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.push(tx); chart.data.datasets[1].data.shift();
+        chart.update('none');
+      }
+      push(wanChart, d.wlan0, prevT.wlan0);
+      push(lanChart, d.eth0, prevT.eth0);
+    }
+    prevT=d; prevTs=now;
+  } catch(e){}
+}
+
+// ── Services ───────────────────────────────────────────
+async function refreshServices() {
+  try {
+    const svcs = await fetch("{{ url_for('main.api_services') }}").then(r=>r.json());
+    const el = document.getElementById('svc-list');
+    const ts = document.getElementById('svc-updated');
+    let html = '<ul class="list-group list-group-flush">';
+    svcs.forEach(s => {
+      const cls = s.active ? 'text-success' : (s.state==='failed' ? 'text-danger' : 'text-secondary');
+      const icon = s.active ? 'fa-circle-check' : (s.state==='failed' ? 'fa-circle-xmark' : 'fa-circle');
+      html += `<li class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
+        <span class="small">${escHtml(s.name)}</span>
+        <span class="small fw-semibold ${cls}"><i class="fa-solid ${icon} me-1"></i>${escHtml(s.state)}</span>
+      </li>`;
+    });
+    html += '</ul>';
+    el.innerHTML = html;
+    if (ts) ts.textContent = new Date().toLocaleTimeString();
+  } catch(e) {}
+}
+
+// ── Leases ─────────────────────────────────────────────
+async function refreshLeases() {
+  try {
+    const leases = await fetch("{{ url_for('main.api_leases') }}").then(r=>r.json());
+    const el = document.getElementById('lease-list');
+    const cnt = document.getElementById('lease-count');
+    if (cnt) cnt.textContent = leases.length;
+    if (!leases.length) {
+      el.innerHTML = '<p class="text-muted small text-center py-3 mb-0">No active leases.</p>';
+      return;
+    }
+    let html = '<table class="table table-sm table-hover mb-0 align-middle"><tbody>';
+    leases.slice(0, 8).forEach(l => {
+      const display = escHtml(l.nickname || l.hostname || '—');
+      html += `<tr><td class="font-monospace small">${escHtml(l.ip)}</td><td class="small">${display}</td><td class="font-monospace text-muted" style="font-size:.75rem">${escHtml(l.mac)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    if (leases.length > 8) html += `<p class="text-muted small text-center py-1 mb-0">+${leases.length-8} more</p>`;
+    el.innerHTML = html;
+  } catch(e) {}
+}
+
+// ── Stats ──────────────────────────────────────────────
 async function refreshStats() {
   try {
-    const d = await fetch("{{ url_for('main.api_stats') }}").then(r => r.json());
-    const up = document.getElementById('sys-uptime');
-    if (up && d.uptime) up.textContent = d.uptime;
-    const tmp = document.getElementById('sys-temp');
-    if (tmp && d.cpu_temp) tmp.textContent = d.cpu_temp + '°C';
-    if (d.cpu_percent !== undefined) setBar('sys-cpu-bar', 'sys-cpu-pct', d.cpu_percent);
-    if (d.memory_percent !== undefined) setBar('sys-mem-bar', 'sys-mem-pct', d.memory_percent);
-    if (d.disk_percent !== undefined) setBar('sys-disk-bar', 'sys-disk-pct', d.disk_percent);
-  } catch (_) {}
+    const d = await fetch("{{ url_for('main.api_stats') }}").then(r=>r.json());
+    const up = document.getElementById('sys-uptime'); if(up&&d.uptime) up.textContent=d.uptime;
+    const tmp = document.getElementById('sys-temp'); if(tmp&&d.cpu_temp) tmp.textContent=d.cpu_temp+'°C';
+    if(d.cpu_percent!==undefined) setBar('sys-cpu-bar','sys-cpu-pct',d.cpu_percent);
+    if(d.memory_percent!==undefined) setBar('sys-mem-bar','sys-mem-pct',d.memory_percent);
+    if(d.disk_percent!==undefined) setBar('sys-disk-bar','sys-disk-pct',d.disk_percent);
+  } catch(_){}
 }
 
+// ── Logs ───────────────────────────────────────────────
 async function refreshLogs() {
-  const el = document.getElementById('dashboard-logs');
-  const ts = document.getElementById('log-updated');
+  const el=document.getElementById('dashboard-logs'), ts=document.getElementById('log-updated');
   try {
-    const d = await fetch("{{ url_for('main.api_logs') }}").then(r => r.json());
-    el.textContent = d.logs || '(no log entries)';
-    el.scrollTop = el.scrollHeight;
-    if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
-  } catch (_) {
-    el.textContent = 'Failed to load logs.';
-  }
+    const d = await fetch("{{ url_for('main.api_logs') }}").then(r=>r.json());
+    el.textContent = d.logs||'(no log entries)'; el.scrollTop=el.scrollHeight;
+    if(ts) ts.textContent='Updated '+new Date().toLocaleTimeString();
+  } catch(_){ el.textContent='Failed to load logs.'; }
 }
 
-refreshStats();
-refreshLogs();
+// ── Init ───────────────────────────────────────────────
+refreshTraffic(); refreshServices(); refreshLeases(); refreshStats(); refreshLogs();
+setInterval(refreshTraffic, 2000);
+setInterval(refreshServices, 30000);
+setInterval(refreshLeases, 30000);
 setInterval(refreshStats, 10000);
 setInterval(refreshLogs, 30000);
 </script>

@@ -7,6 +7,7 @@ Cmnd_Alias WIFIPROXY_NM = /usr/bin/nmcli *
 
 Cmnd_Alias WIFIPROXY_DHCP = \
     /usr/bin/tee /etc/dnsmasq.conf, \
+    /usr/bin/tee /var/lib/dnsmasq/dnsmasq.leases, \
     /usr/bin/systemctl restart dnsmasq, \
     /usr/bin/systemctl start dnsmasq, \
     /usr/bin/systemctl stop dnsmasq

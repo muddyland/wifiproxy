@@ -8,6 +8,7 @@ from app.validators import (ValidationError, validate_ip, validate_interface,
                              validate_lease_time)
 
 
+
 @bp.route("/")
 @login_required
 def index():
@@ -65,3 +66,48 @@ def reapply_nat():
 @login_required
 def leases_json():
     return jsonify(utils.get_leases())
+
+
+@bp.route("/reservation/save", methods=["POST"])
+@login_required
+def save_reservation():
+    from app.models import DhcpReservation
+    mac = request.form.get("mac", "").strip().lower()
+    nickname = request.form.get("nickname", "").strip()[:64]
+    static_ip = request.form.get("static_ip", "").strip()
+    if not mac:
+        flash("MAC address required.", "danger")
+        return redirect(url_for("dhcp.index"))
+    res = DhcpReservation.query.filter_by(mac=mac).first()
+    if not res:
+        res = DhcpReservation(mac=mac)
+        db.session.add(res)
+    res.nickname = nickname
+    res.static_ip = static_ip
+    db.session.commit()
+    cfg = DhcpConfig.query.first()
+    utils.write_dnsmasq_config(cfg)
+    flash("Reservation saved.", "success")
+    return redirect(url_for("dhcp.index"))
+
+
+@bp.route("/reservation/delete/<int:res_id>", methods=["POST"])
+@login_required
+def delete_reservation(res_id):
+    from app.models import DhcpReservation
+    res = db.get_or_404(DhcpReservation, res_id)
+    db.session.delete(res)
+    db.session.commit()
+    cfg = DhcpConfig.query.first()
+    utils.write_dnsmasq_config(cfg)
+    flash("Reservation removed.", "info")
+    return redirect(url_for("dhcp.index"))
+
+
+@bp.route("/lease/invalidate", methods=["POST"])
+@login_required
+def invalidate_lease_route():
+    ip = request.form.get("ip", "").strip()
+    ok, msg = utils.invalidate_lease(ip)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("dhcp.index"))
