@@ -95,7 +95,15 @@
             <input type="url" name="login_server" class="form-control font-monospace"
                    value="{{ cfg.login_server }}" required maxlength="256"
                    placeholder="https://controlplane.tailscale.com">
-            <div class="form-text">For headscale: <code>https://your.headscale.server</code></div>
+            <div class="form-text d-flex justify-content-between flex-wrap gap-1">
+              <span>For headscale: <code>https://your.headscale.server</code></span>
+              {% if prefs.control_url %}
+                <span class="text-info">
+                  <i class="fa-solid fa-circle-dot me-1"></i>Live:
+                  <code>{{ prefs.control_url }}</code>
+                </span>
+              {% endif %}
+            </div>
           </div>
 
           <div class="mb-3">
@@ -103,12 +111,18 @@
             <div class="input-group">
               <input type="password" name="auth_key" class="form-control font-monospace"
                      placeholder="tskey-auth-… or headscale preauthkey"
-                     value="{{ cfg.auth_key }}" maxlength="256">
+                     value="{{ cfg.auth_key }}" maxlength="256"
+                     autocomplete="new-password">
               <button class="btn btn-outline-secondary toggle-pw" type="button">
                 <i class="fa-solid fa-eye"></i>
               </button>
             </div>
-            <div class="form-text">Leave blank to use interactive browser login (a URL will be shown after connecting).</div>
+            <div class="form-text d-flex justify-content-between flex-wrap gap-1">
+              <span>Leave blank to use interactive browser login.</span>
+              {% if cfg.auth_key %}
+                <span class="text-info"><i class="fa-solid fa-key me-1"></i>Key saved (hidden)</span>
+              {% endif %}
+            </div>
           </div>
 
           <div class="mb-3">
@@ -116,16 +130,32 @@
             <input type="text" name="advertise_routes" class="form-control font-monospace"
                    value="{{ cfg.advertise_routes }}" maxlength="256"
                    placeholder="192.168.50.0/24,10.0.0.0/8">
-            <div class="form-text">Comma-separated CIDR ranges to advertise via Tailscale.</div>
+            <div class="form-text d-flex justify-content-between flex-wrap gap-1">
+              <span>Comma-separated CIDRs to advertise via Tailscale.</span>
+              {% if status.live_advertised_routes %}
+                <span class="text-info">
+                  <i class="fa-solid fa-circle-dot me-1"></i>Live:
+                  <code>{{ status.live_advertised_routes }}</code>
+                </span>
+              {% elif status.running %}
+                <span class="text-muted"><i class="fa-solid fa-circle-dot me-1"></i>Live: none</span>
+              {% endif %}
+            </div>
           </div>
 
-          <div class="d-flex gap-4 mb-4">
+          <div class="d-flex gap-4 mb-4 flex-wrap">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" name="advertise_exit_node"
                      id="exit_node" {% if cfg.advertise_exit_node %}checked{% endif %}>
               <label class="form-check-label" for="exit_node">
                 <span class="fw-semibold">Advertise exit node</span><br>
-                <small class="text-muted">Allow Tailscale peers to route all traffic through this Pi.</small>
+                <small class="text-muted">Allow peers to route all traffic through this Pi.</small>
+                {% if status.live_advertise_exit_node is not none and status.running %}
+                  <br><small class="text-info">
+                    <i class="fa-solid fa-circle-dot me-1"></i>Live:
+                    {{ "on" if status.live_advertise_exit_node else "off" }}
+                  </small>
+                {% endif %}
               </label>
             </div>
             <div class="form-check">
@@ -134,6 +164,12 @@
               <label class="form-check-label" for="accept_routes">
                 <span class="fw-semibold">Accept routes</span><br>
                 <small class="text-muted">Accept subnet routes advertised by other nodes.</small>
+                {% if prefs.accept_routes is not none %}
+                  <br><small class="text-info">
+                    <i class="fa-solid fa-circle-dot me-1"></i>Live:
+                    {{ "on" if prefs.accept_routes else "off" }}
+                  </small>
+                {% endif %}
               </label>
             </div>
           </div>

@@ -36,6 +36,8 @@ def get_status() -> dict:
         "exit_node_active": False,
         "login_server": None,
         "backend_state": None,
+        "live_advertise_exit_node": None,
+        "live_advertised_routes": None,
     }
     if not result["installed"]:
         return result
@@ -73,6 +75,11 @@ def get_status() -> dict:
         result["login_server"] = (data.get("CurrentTailnet") or {}).get("MagicDNSSuffix")
         result["exit_node_active"] = bool(data.get("ExitNodeStatus"))
 
+        # Live config flags — reflect what tailscale is actually running with
+        result["live_advertise_exit_node"] = bool(self_node.get("ExitNodeOption"))
+        primary_routes = self_node.get("PrimaryRoutes") or []
+        result["live_advertised_routes"] = ", ".join(primary_routes)
+
         peers = []
         for peer in (data.get("Peer") or {}).values():
             peers.append({
@@ -87,6 +94,21 @@ def get_status() -> dict:
         current_app.logger.error("tailscale get_status error: %s", exc)
 
     return result
+
+
+def get_prefs() -> dict:
+    """Return selected tailscale prefs (ControlURL, RouteAll). Best-effort — may return {}."""
+    try:
+        r = _run_plain(["tailscale", "prefs", "--json"])
+        if r.returncode != 0:
+            r = _run(["tailscale", "prefs", "--json"])
+        data = json.loads(r.stdout)
+        return {
+            "control_url": data.get("ControlURL"),
+            "accept_routes": data.get("RouteAll"),
+        }
+    except Exception:
+        return {}
 
 
 def login(login_server: str, auth_key: str = "", advertise_exit_node: bool = False,

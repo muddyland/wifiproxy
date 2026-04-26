@@ -98,6 +98,12 @@ else
     skip "User $APP_USER already exists."
 fi
 
+# Add app user to systemd-journal group so it can read the journal without sudo
+if getent group systemd-journal &>/dev/null; then
+    usermod -aG systemd-journal "$APP_USER"
+    info "Added $APP_USER to systemd-journal group."
+fi
+
 # ── 3. Deploy app files ─────────────────────────────────────────────────────
 info "Deploying app files to $APP_DIR..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

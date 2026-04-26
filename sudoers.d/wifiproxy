@@ -32,11 +32,16 @@ Cmnd_Alias WIFIPROXY_TAILSCALE = \
     /usr/bin/tailscale up *, \
     /usr/bin/tailscale down, \
     /usr/bin/tailscale logout, \
-    /usr/bin/tailscale status *
+    /usr/bin/tailscale status *, \
+    /usr/bin/tailscale prefs *
+
+Cmnd_Alias WIFIPROXY_LOGS = \
+    /usr/bin/journalctl *
 
 www-data ALL=(root) NOPASSWD: \
     WIFIPROXY_NM, \
     WIFIPROXY_DHCP, \
     WIFIPROXY_IPTABLES, \
     WIFIPROXY_SYSTEM, \
-    WIFIPROXY_TAILSCALE
+    WIFIPROXY_TAILSCALE, \
+    WIFIPROXY_LOGS

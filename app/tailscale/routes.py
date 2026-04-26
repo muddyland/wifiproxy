@@ -12,8 +12,10 @@ from app.validators import ValidationError, validate_url, validate_cidr_list
 def index():
     cfg = TailscaleConfig.query.first()
     status = utils.get_status()
+    prefs = utils.get_prefs()
     login_url = session.pop("ts_login_url", None)
-    return render_template("tailscale/index.html", cfg=cfg, status=status, login_url=login_url)
+    return render_template("tailscale/index.html", cfg=cfg, status=status,
+                           prefs=prefs, login_url=login_url)
 
 
 @bp.route("/save", methods=["POST"])

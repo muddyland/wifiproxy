@@ -78,12 +78,16 @@ def set_hostname(name: str) -> tuple[bool, str]:
 
 
 def get_logs(lines: int = 100, unit: str = "") -> str:
+    cmd = ["journalctl", "-n", str(lines), "--no-pager", "-o", "short-iso"]
+    if unit:
+        cmd += ["-u", unit]
     try:
-        cmd = ["journalctl", "-n", str(lines), "--no-pager", "-o", "short-iso"]
-        if unit:
-            cmd += ["-u", unit]
         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=10)
-        return r.stdout
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout
+        # Fall back to sudo — wifiproxy user may lack systemd-journal group access
+        r2 = _sudo(cmd, timeout=10)
+        return r2.stdout or r.stderr or ""
     except Exception as exc:  # noqa: BLE001
         return str(exc)
 
