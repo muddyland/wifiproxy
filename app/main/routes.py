@@ -5,13 +5,18 @@ from app.wifi import utils as wifi_utils
 from app.dhcp import utils as dhcp_utils
 from app.tailscale import utils as ts_utils
 from app.system import utils as sys_utils
+from app.models import WifiNetwork
 
 
 @bp.route("/")
 @login_required
 def dashboard():
+    wifi = wifi_utils.get_current_connection()
+    if wifi["connected"]:
+        active_net = WifiNetwork.query.filter_by(ssid=wifi["ssid"]).first()
+        wifi["priority"] = active_net.priority if active_net else None
     ctx = {
-        "wifi": wifi_utils.get_current_connection(),
+        "wifi": wifi,
         "bridge": dhcp_utils.get_bridge_status(),
         "tailscale": ts_utils.get_status(),
         "system": sys_utils.get_full_info(),

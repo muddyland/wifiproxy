@@ -27,7 +27,10 @@
             <div class="progress" style="height:4px">
               <div class="progress-bar bg-success" style="width:{{ wifi.signal }}%"></div>
             </div>
-            <p class="text-muted small mt-1">Signal: {{ wifi.signal }}%</p>
+            <p class="text-muted small mt-1">
+              Signal: {{ wifi.signal }}%
+              {% if wifi.priority is not none %}&nbsp;·&nbsp;Priority: {{ wifi.priority }}{% endif %}
+            </p>
           {% endif %}
         {% else %}
           <p class="text-muted small"><i class="fa-solid fa-circle-dot text-secondary me-1"></i> No connection</p>

@@ -19,7 +19,12 @@
       <div class="card-body d-flex flex-wrap align-items-center gap-3">
         {% if current.connected %}
           <div>
-            <p class="mb-0 fw-semibold fs-5">{{ current.ssid }}</p>
+            <p class="mb-0 fw-semibold fs-5">
+              {{ current.ssid }}
+              {% if current.priority is not none %}
+                <span class="badge bg-primary rounded-pill ms-1 fs-6">P{{ current.priority }}</span>
+              {% endif %}
+            </p>
             {% if current.ip %}<p class="mb-0 text-muted small">{{ current.ip }}</p>{% endif %}
           </div>
           {% if current.signal is not none %}

@@ -13,6 +13,9 @@ from app.validators import (ValidationError, validate_ssid, validate_bssid,
 def index():
     networks = WifiNetwork.query.order_by(WifiNetwork.priority.desc()).all()
     current = utils.get_current_connection()
+    if current["connected"]:
+        active_net = WifiNetwork.query.filter_by(ssid=current["ssid"]).first()
+        current["priority"] = active_net.priority if active_net else None
     db_ssids = {n.ssid for n in networks}
     nm_only = utils.get_nm_only_connections(db_ssids)
     return render_template("wifi/index.html", networks=networks, current=current,
