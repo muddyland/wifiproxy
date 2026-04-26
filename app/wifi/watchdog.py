@@ -1,9 +1,6 @@
 """Background thread: connect to the highest-priority visible WiFi network."""
 import threading
 import time
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def start(app):
@@ -20,9 +17,10 @@ def _loop(app):
         time.sleep(60)
         try:
             with app.app_context():
+                app.logger.info("Watchdog: tick")
                 _check(app)
         except Exception as exc:
-            logger.error("Watchdog error: %s", exc)
+            app.logger.exception("Watchdog error: %s", exc)
 
 
 def _check(app):
