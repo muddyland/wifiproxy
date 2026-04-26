@@ -30,11 +30,13 @@ def _check(app):
     from app.wifi import utils
 
     current = utils.get_current_connection()
+    app.logger.debug("Watchdog: current=%s connected=%s", current.get("ssid"), current.get("connected"))
     if not current["connected"]:
         return
 
     current_net = WifiNetwork.query.filter_by(ssid=current["ssid"]).first()
     current_priority = current_net.priority if current_net else 0
+    app.logger.debug("Watchdog: current priority=%s", current_priority)
 
     candidates = (
         WifiNetwork.query
@@ -45,10 +47,13 @@ def _check(app):
         .order_by(WifiNetwork.priority.desc())
         .all()
     )
+    app.logger.debug("Watchdog: candidates=%s", [f"{n.ssid}(p={n.priority})" for n in candidates])
     if not candidates:
         return
 
-    visible = {n["ssid"] for n in utils.scan_networks(rescan=True)}
+    scan_results = utils.scan_networks(rescan=True)
+    visible = {n["ssid"] for n in scan_results}
+    app.logger.debug("Watchdog: visible=%s", sorted(visible))
     for net in candidates:
         if net.ssid in visible:
             app.logger.info("Watchdog: upgrading to '%s' (priority %s)", net.ssid, net.priority)
@@ -58,3 +63,4 @@ def _check(app):
             else:
                 app.logger.warning("Watchdog: failed to connect to '%s': %s", net.ssid, msg)
             return
+    app.logger.debug("Watchdog: no higher-priority network visible, staying on '%s'", current.get("ssid"))

@@ -15,6 +15,7 @@ class Config:
 
     RATELIMIT_STORAGE_URI = "memory://"
     WIFI_WATCHDOG = True
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
     DNSMASQ_CONF = "/etc/dnsmasq.conf"
     DNSMASQ_LEASES = "/var/lib/dnsmasq/dnsmasq.leases"

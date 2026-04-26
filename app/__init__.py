@@ -1,3 +1,4 @@
+import logging
 from flask import Flask, redirect, url_for, request, g
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
@@ -21,6 +22,9 @@ def create_app(config_class=Config):
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
     # Set SECURE only when not in dev/testing (caller can override)
     app.config.setdefault("SESSION_COOKIE_SECURE", not app.debug)
+
+    logging.basicConfig(level=app.config["LOG_LEVEL"])
+    app.logger.setLevel(app.config["LOG_LEVEL"])
 
     db.init_app(app)
     login_manager.init_app(app)
