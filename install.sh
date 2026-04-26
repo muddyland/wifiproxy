@@ -239,7 +239,7 @@ WorkingDirectory=${APP_DIR}
 Environment="BIND_HOST=${LAN_IP}"
 Environment="PORT=${APP_PORT}"
 Environment="SECRET_KEY=${SECRET_KEY}"
-ExecStart=${APP_DIR}/venv/bin/python run.py
+ExecStart=${APP_DIR}/venv/bin/gunicorn --workers 1 --bind ${LAN_IP}:${APP_PORT} --timeout 120 "app:create_app()"
 Restart=on-failure
 RestartSec=5
 AmbientCapabilities=CAP_NET_BIND_SERVICE
