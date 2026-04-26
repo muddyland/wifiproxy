@@ -83,7 +83,7 @@ class TestSystemLogs:
     def test_lines_capped_at_500(self, auth_client):
         with patch("app.system.utils.get_logs", return_value="") as mock_fn:
             auth_client.get("/system/logs?lines=9999")
-        mock_fn.assert_called_once_with(500)
+        mock_fn.assert_called_once_with(500, "")
 
 
 class TestReboot:

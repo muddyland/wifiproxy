@@ -77,12 +77,12 @@ def set_hostname(name: str) -> tuple[bool, str]:
     return r.returncode == 0, (r.stderr or r.stdout).strip()
 
 
-def get_logs(lines: int = 100) -> str:
+def get_logs(lines: int = 100, unit: str = "") -> str:
     try:
-        r = subprocess.run(
-            ["journalctl", "-n", str(lines), "--no-pager", "-o", "short-iso"],
-            capture_output=True, text=True, encoding="utf-8", timeout=10,
-        )
+        cmd = ["journalctl", "-n", str(lines), "--no-pager", "-o", "short-iso"]
+        if unit:
+            cmd += ["-u", unit]
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=10)
         return r.stdout
     except Exception as exc:  # noqa: BLE001
         return str(exc)

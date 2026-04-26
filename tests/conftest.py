@@ -11,6 +11,7 @@ class TestConfig(Config):
     WTF_CSRF_ENABLED = False
     SESSION_COOKIE_SECURE = False
     RATELIMIT_ENABLED = False
+    WIFI_WATCHDOG = False
     WAN_INTERFACE = "wlan0"
     LAN_INTERFACE = "eth0"
     NM_LAN_CONNECTION = "Ethernet-Share"

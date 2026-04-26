@@ -14,6 +14,7 @@ class Config:
     NM_LAN_CONNECTION = os.environ.get("NM_LAN_CONNECTION", "Ethernet-Share")
 
     RATELIMIT_STORAGE_URI = "memory://"
+    WIFI_WATCHDOG = True
 
     DNSMASQ_CONF = "/etc/dnsmasq.conf"
     DNSMASQ_LEASES = "/var/lib/dnsmasq/dnsmasq.leases"

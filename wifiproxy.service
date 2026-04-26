@@ -15,10 +15,11 @@ Restart=on-failure
 RestartSec=5
 
 # Allow binding to port 80 as a non-root user.
-# AmbientCapabilities and NoNewPrivileges=yes are mutually exclusive —
-# the capability must be ambient (inherited), not elevated.
+# AmbientCapabilities makes CAP_NET_BIND_SERVICE inheritable across exec.
+# CapabilityBoundingSet is intentionally omitted — restricting the bounding
+# set to a single capability prevents sudo (run by app for iptables/nmcli)
+# from acquiring CAP_SETUID/SETGID, breaking all privileged commands.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 PrivateTmp=yes
 
 [Install]

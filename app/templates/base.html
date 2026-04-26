@@ -46,15 +46,13 @@
       <li class="nav-item">
         <a href="{{ url_for('system.index') }}"
            class="nav-link {% if request.blueprint == 'system' %}active{% endif %}">
-          <i class="fa-solid fa-server nav-icon"></i> System
+          <i class="fa-solid fa-gear nav-icon"></i> Settings
         </a>
       </li>
     </ul>
 
     <div class="mt-auto pt-3 border-top border-secondary">
-      <a href="{{ url_for('auth.logout') }}" class="nav-link text-danger-emphasis">
-        <i class="fa-solid fa-right-from-bracket nav-icon"></i> Logout
-      </a>
+      <p class="text-muted small mb-0 px-2">WiFi Bridge</p>
     </div>
   </nav>
 
@@ -66,7 +64,25 @@
         <i class="fa-solid fa-bars"></i>
       </button>
       <h1 class="h5 mb-0 fw-semibold text-body">{% block page_title %}Dashboard{% endblock %}</h1>
-      <span class="text-muted small">{{ current_user.username }}</span>
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="fa-solid fa-user me-1"></i>{{ current_user.username }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li>
+            <a class="dropdown-item" href="{{ url_for('system.index') }}#change-password">
+              <i class="fa-solid fa-key me-2"></i>Change Password
+            </a>
+          </li>
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+              <i class="fa-solid fa-right-from-bracket me-2"></i>Logout
+            </a>
+          </li>
+        </ul>
+      </div>
     </header>
 
     <!-- Flash messages -->

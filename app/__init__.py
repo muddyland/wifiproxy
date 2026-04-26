@@ -70,6 +70,9 @@ def create_app(config_class=Config):
         db.create_all()
         _seed_defaults()
 
+    from app.wifi.watchdog import start as start_watchdog
+    start_watchdog(app)
+
     return app
 
 

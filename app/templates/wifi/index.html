@@ -44,6 +44,25 @@
     </div>
   </div>
 
+  <!-- NM-only networks (saved in NM but not in app DB) -->
+  {% if nm_only %}
+  <div class="col-12">
+    <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-0">
+      <i class="fa-solid fa-circle-info me-1"></i>
+      <span class="fw-semibold">NetworkManager has saved networks not tracked here:</span>
+      {% for ssid in nm_only %}
+        <form method="post" action="{{ url_for('wifi.import_nm') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="ssid" value="{{ ssid }}">
+          <button class="btn btn-sm btn-outline-primary">
+            <i class="fa-solid fa-file-import me-1"></i>Import "{{ ssid }}"
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Saved networks -->
   <div class="col-12 col-lg-7">
     <div class="card shadow-sm">
@@ -195,13 +214,15 @@
 
 {% block scripts %}
 <script>
+const savedSsids = new Set({{ networks | map(attribute='ssid') | list | tojson }});
+
 // Scan button
 document.getElementById('scan-btn').addEventListener('click', async function() {
   const btn = this;
   const results = document.getElementById('scan-results');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Scanning...';
-  results.innerHTML = '<p class="text-muted small text-center py-3 mb-0">Scanning...</p>';
+  results.innerHTML = '<p class="text-muted small text-center py-3 mb-0">Scanning…</p>';
 
   try {
     const res = await fetch("{{ url_for('wifi.scan') }}");
@@ -216,10 +237,12 @@ document.getElementById('scan-btn').addEventListener('click', async function() {
       const barIcons = Array.from({length: 3}, (_, i) =>
         `<i class="fa-solid fa-signal" style="opacity:${i < bars ? 1 : 0.25}"></i>`
       ).join('');
+      const isSaved = savedSsids.has(n.ssid);
       html += `<li class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
         <div>
           <span class="fw-semibold">${escHtml(n.ssid)}</span>
           ${n.active ? '<span class="badge bg-success ms-1 small">active</span>' : ''}
+          ${isSaved ? '<span class="badge bg-info ms-1 small">saved</span>' : ''}
           <br><small class="text-muted">${escHtml(n.security)}</small>
         </div>
         <div class="d-flex align-items-center gap-2">

@@ -12,12 +12,26 @@ def _completed(stdout="", stderr="", returncode=0):
     return r
 
 
+def _ml(*entries):
+    """Build nmcli multiline output from (ssid, signal, security, active) tuples."""
+    lines = []
+    for ssid, signal, security, active in entries:
+        lines += [
+            f"SSID:     {ssid}",
+            f"SIGNAL:   {signal}",
+            f"SECURITY: {security}",
+            f"ACTIVE:   {active}",
+            "",
+        ]
+    return "\n".join(lines)
+
+
 class TestScanNetworks:
     def test_parses_output(self, app):
-        nmcli_output = (
-            "HomeNet:85:WPA2:yes\n"
-            "Neighbor:40:WPA2:no\n"
-            "OpenNet:60:Open:no\n"
+        nmcli_output = _ml(
+            ("HomeNet", "85", "WPA2", "yes"),
+            ("Neighbor", "40", "WPA2", "no"),
+            ("OpenNet", "60", "Open", "no"),
         )
         with app.app_context():
             with patch("app.wifi.utils._run", return_value=_completed(nmcli_output)):
@@ -29,7 +43,7 @@ class TestScanNetworks:
         assert results[0]["active"] is True
 
     def test_deduplicates_ssids(self, app):
-        nmcli_output = "Dup:80:WPA2:no\nDup:70:WPA2:no\n"
+        nmcli_output = _ml(("Dup", "80", "WPA2", "no"), ("Dup", "70", "WPA2", "no"))
         with app.app_context():
             with patch("app.wifi.utils._run", return_value=_completed(nmcli_output)):
                 results = utils.scan_networks()
@@ -42,7 +56,11 @@ class TestScanNetworks:
         assert results == []
 
     def test_sorted_by_signal_descending(self, app):
-        nmcli_output = "Weak:20:WPA2:no\nStrong:90:WPA2:no\nMid:50:WPA2:no\n"
+        nmcli_output = _ml(
+            ("Weak", "20", "WPA2", "no"),
+            ("Strong", "90", "WPA2", "no"),
+            ("Mid", "50", "WPA2", "no"),
+        )
         with app.app_context():
             with patch("app.wifi.utils._run", return_value=_completed(nmcli_output)):
                 results = utils.scan_networks()
@@ -50,7 +68,7 @@ class TestScanNetworks:
         assert signals == sorted(signals, reverse=True)
 
     def test_skips_empty_ssids(self, app):
-        nmcli_output = ":80:WPA2:no\nRealNet:70:WPA2:no\n"
+        nmcli_output = _ml(("", "80", "WPA2", "no"), ("RealNet", "70", "WPA2", "no"))
         with app.app_context():
             with patch("app.wifi.utils._run", return_value=_completed(nmcli_output)):
                 results = utils.scan_networks()

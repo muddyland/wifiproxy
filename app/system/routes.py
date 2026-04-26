@@ -43,7 +43,8 @@ def check_updates():
 @login_required
 def logs():
     lines = min(int(request.args.get("lines", 100)), 500)
-    return jsonify({"logs": utils.get_logs(lines)})
+    unit = request.args.get("unit", "")
+    return jsonify({"logs": utils.get_logs(lines, unit)})
 
 
 @bp.route("/reboot", methods=["POST"])

@@ -19,11 +19,20 @@
           {% if status.exit_node_active %}
             <span class="badge bg-info ms-2"><i class="fa-solid fa-route me-1"></i>Exit node active</span>
           {% endif %}
+        {% elif status.needs_auth %}
+          <span class="badge bg-warning text-dark fs-6 py-2 px-3"><i class="fa-solid fa-key me-1"></i>Needs authentication</span>
         {% else %}
-          <span class="badge bg-warning text-dark fs-6 py-2 px-3"><i class="fa-solid fa-circle-exclamation me-1"></i>Not connected</span>
+          <span class="badge bg-secondary fs-6 py-2 px-3"><i class="fa-solid fa-circle-exclamation me-1"></i>{{ status.backend_state or "Not connected" }}</span>
+        {% endif %}
+
+        {% if status.backend_state and not status.connected %}
+          <span class="text-muted small font-monospace">{{ status.backend_state }}</span>
         {% endif %}
 
         <div class="ms-auto d-flex gap-2 flex-wrap">
+          <a href="{{ url_for('tailscale.index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-rotate me-1"></i>Refresh
+          </a>
           {% if status.installed %}
             {% if status.connected %}
               <form method="post" action="{{ url_for('tailscale.bring_down') }}">
@@ -53,8 +62,9 @@
     </div>
   </div>
 
-  <!-- Login URL (from headscale interactive flow) -->
-  {% if login_url %}
+  <!-- Auth URL — from interactive connect flow OR existing tailscale status -->
+  {% set display_url = login_url or status.auth_url %}
+  {% if display_url %}
   <div class="col-12">
     <div class="alert alert-info d-flex align-items-start gap-3">
       <i class="fa-solid fa-circle-info fa-lg mt-1 flex-shrink-0"></i>
@@ -62,9 +72,9 @@
         <strong>Authentication required.</strong>
         Open this URL on a device with a browser to complete sign-in:
         <br>
-        <code class="user-select-all">{{ login_url }}</code>
+        <code class="user-select-all">{{ display_url }}</code>
         <br>
-        <small class="text-muted">After approving the node in headscale, click Connect again.</small>
+        <small class="text-muted">After approving the node in headscale, click Refresh or Connect again.</small>
       </div>
     </div>
   </div>

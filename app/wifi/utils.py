@@ -11,33 +11,48 @@ def _sudo(cmd: list, timeout: int = 30) -> subprocess.CompletedProcess:
     return _run(["sudo"] + cmd, timeout=timeout)
 
 
-def scan_networks() -> list[dict]:
-    """Return list of visible WiFi networks, sorted by signal strength."""
+def scan_networks(rescan: bool = True) -> list[dict]:
+    """Return visible WiFi networks sorted by signal strength.
+
+    Uses nmcli multiline output to avoid colon-in-SSID parsing ambiguity.
+    Pass rescan=False to use the cached scan result (faster, non-disruptive).
+    """
     try:
-        result = _run(
-            ["nmcli", "--terse", "--escape", "no",
-             "-f", "SSID,SIGNAL,SECURITY,ACTIVE",
-             "dev", "wifi", "list", "--rescan", "yes"],
-            timeout=20,
-        )
+        cmd = [
+            "nmcli", "--mode", "multiline", "--escape", "no",
+            "-f", "SSID,SIGNAL,SECURITY,ACTIVE",
+            "dev", "wifi", "list",
+        ]
+        if rescan:
+            cmd += ["--rescan", "yes"]
+        result = _run(cmd, timeout=20)
         networks = []
         seen: set[str] = set()
-        for line in result.stdout.strip().splitlines():
-            parts = line.split(":", 3)
-            if len(parts) < 4:
+        entry: dict = {}
+        for raw_line in result.stdout.splitlines():
+            line = raw_line.strip()
+            if not line:
+                if entry.get("ssid") and entry["ssid"] not in seen:
+                    seen.add(entry["ssid"])
+                    networks.append(entry)
+                entry = {}
                 continue
-            ssid, signal, security, active = parts
-            ssid = ssid.strip()
-            if not ssid or ssid in seen:
+            if ":" not in line:
                 continue
-            seen.add(ssid)
-            networks.append({
-                "ssid": ssid,
-                "signal": int(signal) if signal.isdigit() else 0,
-                "security": security.strip() or "Open",
-                "active": active.strip() == "yes",
-            })
-        return sorted(networks, key=lambda x: x["signal"], reverse=True)
+            key, _, val = line.partition(":")
+            key = key.strip()
+            val = val.strip()
+            if key == "SSID":
+                entry["ssid"] = val
+            elif key == "SIGNAL":
+                entry["signal"] = int(val) if val.isdigit() else 0
+            elif key == "SECURITY":
+                entry["security"] = val if val and val != "--" else "Open"
+            elif key == "ACTIVE":
+                entry["active"] = val == "yes"
+        if entry.get("ssid") and entry["ssid"] not in seen:
+            networks.append(entry)
+        return sorted(networks, key=lambda x: x.get("signal", 0), reverse=True)
     except Exception as e:
         current_app.logger.error("WiFi scan error: %s", e)
         return []
@@ -145,3 +160,8 @@ def get_nm_saved_connections() -> list[str]:
         ]
     except Exception:
         return []
+
+
+def get_nm_only_connections(db_ssids: set) -> list[str]:
+    """Return NM WiFi connections that are not yet saved in the app DB."""
+    return [s for s in get_nm_saved_connections() if s not in db_ssids]

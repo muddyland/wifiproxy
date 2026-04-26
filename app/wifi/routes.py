@@ -13,7 +13,10 @@ from app.validators import (ValidationError, validate_ssid, validate_bssid,
 def index():
     networks = WifiNetwork.query.order_by(WifiNetwork.priority.desc()).all()
     current = utils.get_current_connection()
-    return render_template("wifi/index.html", networks=networks, current=current)
+    db_ssids = {n.ssid for n in networks}
+    nm_only = utils.get_nm_only_connections(db_ssids)
+    return render_template("wifi/index.html", networks=networks, current=current,
+                           nm_only=nm_only)
 
 
 @bp.route("/scan")
@@ -64,6 +67,25 @@ def add():
         ok, msg = utils.connect(ssid, password, bssid)
         flash(msg, "success" if ok else "danger")
 
+    return redirect(url_for("wifi.index"))
+
+
+@bp.route("/import-nm", methods=["POST"])
+@login_required
+def import_nm():
+    """Import a NetworkManager WiFi connection into the app DB."""
+    try:
+        ssid = validate_ssid(request.form.get("ssid", ""))
+    except ValidationError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("wifi.index"))
+
+    if not WifiNetwork.query.filter_by(ssid=ssid).first():
+        net = WifiNetwork(ssid=ssid, priority=10)
+        db.session.add(net)
+        db.session.commit()
+        utils.set_nm_priority(ssid, 10)
+        flash(f"Imported '{ssid}' from NetworkManager.", "success")
     return redirect(url_for("wifi.index"))
 
 

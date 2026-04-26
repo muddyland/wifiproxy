@@ -70,15 +70,17 @@
             <p class="text-muted small mb-1">Tailscale</p>
             <h5 class="mb-0">{{ tailscale.ip or ("Connected" if tailscale.connected else "Offline") }}</h5>
           </div>
-          <span class="badge rounded-pill {% if tailscale.connected %}bg-success{% elif tailscale.installed %}bg-warning{% else %}bg-secondary{% endif %} fs-6 p-2">
+          <span class="badge rounded-pill {% if tailscale.connected %}bg-success{% elif tailscale.needs_auth %}bg-warning{% elif tailscale.installed %}bg-secondary{% else %}bg-secondary{% endif %} fs-6 p-2">
             <i class="fa-solid fa-shield-halved"></i>
           </span>
         </div>
         {% if tailscale.connected %}
           <p class="text-muted small mb-1"><i class="fa-solid fa-circle-dot text-success me-1"></i> Connected</p>
           {% if tailscale.hostname %}<p class="text-muted small mb-1">{{ tailscale.hostname }}</p>{% endif %}
+        {% elif tailscale.needs_auth %}
+          <p class="text-muted small"><i class="fa-solid fa-circle-dot text-warning me-1"></i> Needs auth</p>
         {% elif tailscale.installed %}
-          <p class="text-muted small"><i class="fa-solid fa-circle-dot text-warning me-1"></i> Not connected</p>
+          <p class="text-muted small"><i class="fa-solid fa-circle-dot text-secondary me-1"></i> Not connected</p>
         {% else %}
           <p class="text-muted small"><i class="fa-solid fa-circle-dot text-secondary me-1"></i> Not installed</p>
         {% endif %}
@@ -91,37 +93,116 @@
   <div class="col-12 col-md-6 col-xl-3">
     <div class="card h-100 shadow-sm">
       <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex justify-content-between align-items-start mb-2">
           <div>
             <p class="text-muted small mb-1">System</p>
-            <h5 class="mb-0">{{ system.hostname or "Pi" }}</h5>
+            <h5 class="mb-0" id="sys-hostname">{{ system.hostname or "Pi" }}</h5>
           </div>
           <span class="badge rounded-pill bg-primary fs-6 p-2">
             <i class="fa-brands fa-raspberry-pi"></i>
           </span>
         </div>
         {% if system %}
+          <p class="text-muted small mb-2">
+            Up <span id="sys-uptime">{{ system.uptime or "—" }}</span>
+            {% if system.cpu_temp %}
+              &nbsp;·&nbsp;<span id="sys-temp">{{ system.cpu_temp }}°C</span>
+            {% endif %}
+          </p>
           <div class="mb-1">
-            <small class="text-muted">CPU</small>
+            <div class="d-flex justify-content-between">
+              <small class="text-muted">CPU</small>
+              <small id="sys-cpu-pct">{{ system.cpu_percent }}%</small>
+            </div>
             <div class="progress" style="height:4px">
               <div class="progress-bar {% if system.cpu_percent > 80 %}bg-danger{% elif system.cpu_percent > 60 %}bg-warning{% else %}bg-primary{% endif %}"
-                   style="width:{{ system.cpu_percent }}%"></div>
+                   id="sys-cpu-bar" style="width:{{ system.cpu_percent }}%"></div>
             </div>
-            <small class="text-muted">{{ system.cpu_percent }}%</small>
           </div>
-          <div>
-            <small class="text-muted">Memory</small>
+          <div class="mb-1">
+            <div class="d-flex justify-content-between">
+              <small class="text-muted">RAM</small>
+              <small id="sys-mem-pct">{{ system.memory_percent }}%</small>
+            </div>
             <div class="progress" style="height:4px">
               <div class="progress-bar {% if system.memory_percent > 80 %}bg-danger{% elif system.memory_percent > 60 %}bg-warning{% else %}bg-primary{% endif %}"
-                   style="width:{{ system.memory_percent }}%"></div>
+                   id="sys-mem-bar" style="width:{{ system.memory_percent }}%"></div>
             </div>
-            <small class="text-muted">{{ system.memory_percent }}%</small>
+          </div>
+          <div class="mb-1">
+            <div class="d-flex justify-content-between">
+              <small class="text-muted">Disk</small>
+              <small id="sys-disk-pct">{{ system.disk_percent }}%</small>
+            </div>
+            <div class="progress" style="height:4px">
+              <div class="progress-bar {% if system.disk_percent > 80 %}bg-danger{% elif system.disk_percent > 60 %}bg-warning{% else %}bg-primary{% endif %}"
+                   id="sys-disk-bar" style="width:{{ system.disk_percent }}%"></div>
+            </div>
           </div>
         {% endif %}
-        <a href="{{ url_for('system.index') }}" class="btn btn-sm btn-outline-primary mt-2">Manage</a>
+        <a href="{{ url_for('system.index') }}" class="btn btn-sm btn-outline-primary mt-2">Settings</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Service Logs -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="fa-solid fa-scroll me-2"></i>Service Logs</span>
+        <span class="text-muted small" id="log-updated"></span>
+      </div>
+      <div class="card-body p-0">
+        <pre id="dashboard-logs" class="log-box mb-0 p-3 small">Loading…</pre>
       </div>
     </div>
   </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function barClass(p) {
+  return p > 80 ? 'bg-danger' : p > 60 ? 'bg-warning' : 'bg-primary';
+}
+
+function setBar(barId, pctId, pct) {
+  const bar = document.getElementById(barId);
+  const lbl = document.getElementById(pctId);
+  if (bar) { bar.style.width = pct + '%'; bar.className = 'progress-bar ' + barClass(pct); }
+  if (lbl) lbl.textContent = pct + '%';
+}
+
+async function refreshStats() {
+  try {
+    const d = await fetch("{{ url_for('main.api_stats') }}").then(r => r.json());
+    const up = document.getElementById('sys-uptime');
+    if (up && d.uptime) up.textContent = d.uptime;
+    const tmp = document.getElementById('sys-temp');
+    if (tmp && d.cpu_temp) tmp.textContent = d.cpu_temp + '°C';
+    if (d.cpu_percent !== undefined) setBar('sys-cpu-bar', 'sys-cpu-pct', d.cpu_percent);
+    if (d.memory_percent !== undefined) setBar('sys-mem-bar', 'sys-mem-pct', d.memory_percent);
+    if (d.disk_percent !== undefined) setBar('sys-disk-bar', 'sys-disk-pct', d.disk_percent);
+  } catch (_) {}
+}
+
+async function refreshLogs() {
+  const el = document.getElementById('dashboard-logs');
+  const ts = document.getElementById('log-updated');
+  try {
+    const d = await fetch("{{ url_for('main.api_logs') }}").then(r => r.json());
+    el.textContent = d.logs || '(no log entries)';
+    el.scrollTop = el.scrollHeight;
+    if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (_) {
+    el.textContent = 'Failed to load logs.';
+  }
+}
+
+refreshStats();
+refreshLogs();
+setInterval(refreshStats, 10000);
+setInterval(refreshLogs, 30000);
+</script>
 {% endblock %}
