@@ -48,7 +48,7 @@ def _check(app):
     if not candidates:
         return
 
-    visible = {n["ssid"] for n in utils.scan_networks(rescan=False)}
+    visible = {n["ssid"] for n in utils.scan_networks(rescan=True)}
     for net in candidates:
         if net.ssid in visible:
             app.logger.info("Watchdog: upgrading to '%s' (priority %s)", net.ssid, net.priority)
