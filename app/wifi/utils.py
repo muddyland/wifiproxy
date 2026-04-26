@@ -131,11 +131,12 @@ def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool
             return True, "Connected successfully."
         error = r.stderr.strip() or r.stdout.strip()
         if _KEY_MGMT_ERROR in error:
-            # Malformed profile — delete and let nmcli create a clean one
+            # Malformed profile — delete (needs sudo; system user has no polkit session)
+            # and let nmcli create a clean one on retry.
             current_app.logger.warning(
                 "key-mgmt error for '%s', deleting profile and retrying", ssid)
 
-            _run(["nmcli", "connection", "delete", ssid])
+            _sudo(["nmcli", "connection", "delete", ssid])
             r2 = _run(cmd, timeout=30)
             if r2.returncode == 0:
                 return True, "Connected successfully."
