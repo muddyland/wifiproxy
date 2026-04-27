@@ -293,7 +293,7 @@ class TestExitNodePeers:
              patch("app.tailscale.utils.get_prefs", return_value=MOCK_PREFS):
             r = auth_client.get("/tailscale/")
         assert b"laptop" in r.data
-        assert b"exit available" in r.data
+        assert b"exit node" in r.data
         assert b"Use as exit" in r.data
 
     def test_active_exit_node_shown_in_status(self, auth_client):

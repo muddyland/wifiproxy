@@ -45,7 +45,18 @@ def get_tunnels() -> list[dict]:
         return tunnels
     try:
         active = get_active_interfaces()
-        for conf in sorted(WG_DIR.glob("*.conf")):
+        try:
+            conf_files = sorted(WG_DIR.glob("*.conf"))
+        except PermissionError:
+            # /etc/wireguard is mode 700 until install.sh runs; show active tunnels only
+            current_app.logger.warning(
+                "Cannot list /etc/wireguard (permission denied). "
+                "Run: sudo chmod 755 /etc/wireguard"
+            )
+            for name in sorted(active):
+                tunnels.append({"name": name, "active": True, "autostart": is_autostart(name)})
+            return tunnels
+        for conf in conf_files:
             name = conf.stem
             tunnels.append({
                 "name": name,
@@ -102,8 +113,12 @@ def save_config(name: str, content: str) -> tuple[bool, str]:
             input=content, capture_output=True, text=True, encoding="utf-8",
         )
         if r.returncode != 0:
-            return False, r.stderr.strip()
+            err = r.stderr.strip() or "Could not write config — check sudoers rules."
+            return False, err
         _sudo(["chmod", "600", str(conf_path)])
+        # Ensure the directory is world-readable so the app can list tunnels.
+        # /etc/wireguard defaults to mode 700; individual .conf files stay at 600.
+        _sudo(["chmod", "755", str(WG_DIR)])
         return True, f"Config saved as {name}.conf"
     except Exception as exc:
         return False, str(exc)

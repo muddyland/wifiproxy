@@ -37,14 +37,6 @@
           </a>
           {% if status.installed %}
             {% if status.connected %}
-              {% if status.exit_node_active %}
-                <form method="post" action="{{ url_for('tailscale.clear_exit_node') }}">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-outline-info btn-sm">
-                    <i class="fa-solid fa-route me-1"></i>Clear Exit Node
-                  </button>
-                </form>
-              {% endif %}
               <form method="post" action="{{ url_for('tailscale.bring_down') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-outline-warning btn-sm">
@@ -206,10 +198,12 @@
     </div>
   </div>
 
-  <!-- Peers -->
-  {% if status.connected and status.peers %}
+  <!-- Peers + exit node -->
+  {% if status.connected %}
   <div class="col-12 col-lg-5">
-    <div class="card shadow-sm">
+
+    {% if status.peers %}
+    <div class="card shadow-sm mb-3">
       <div class="card-header fw-semibold">
         <i class="fa-solid fa-users me-2"></i>Peers
         <span class="badge bg-primary rounded-pill ms-1">{{ status.peers|length }}</span>
@@ -221,9 +215,8 @@
             <span class="fw-semibold">{{ peer.hostname or "unknown" }}</span>
             {% if peer.exit_node %}
               <span class="badge bg-info ms-1 small">using as exit</span>
-            {% endif %}
-            {% if peer.exit_node_option %}
-              <span class="badge bg-secondary ms-1 small">exit available</span>
+            {% elif peer.exit_node_option %}
+              <span class="badge bg-secondary ms-1 small">exit node</span>
             {% endif %}
             <br><small class="font-monospace text-muted">{{ peer.ip or "" }}</small>
           </div>
@@ -233,7 +226,7 @@
             {% else %}
               <span class="badge bg-secondary rounded-pill">offline</span>
             {% endif %}
-            {% if peer.exit_node_option and peer.ip and peer.online and not peer.exit_node %}
+            {% if peer.ip and peer.online and not peer.exit_node %}
               <form method="post" action="{{ url_for('tailscale.set_exit_node') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="ip" value="{{ peer.ip }}">
@@ -247,6 +240,39 @@
         {% endfor %}
       </ul>
     </div>
+    {% endif %}
+
+    <!-- Manual exit node -->
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="fa-solid fa-route me-2"></i>Exit Node
+      </div>
+      <div class="card-body">
+        {% if status.exit_node_active %}
+          <p class="mb-2 small">
+            Active: <code>{{ status.exit_node_ip or "unknown" }}</code>
+          </p>
+          <form method="post" action="{{ url_for('tailscale.clear_exit_node') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-warning btn-sm">
+              <i class="fa-solid fa-xmark me-1"></i>Clear Exit Node
+            </button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('tailscale.set_exit_node') }}"
+                class="d-flex gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="ip" class="form-control form-control-sm font-monospace"
+                   placeholder="100.x.x.x" required>
+            <button class="btn btn-outline-info btn-sm text-nowrap">
+              <i class="fa-solid fa-route me-1"></i>Set
+            </button>
+          </form>
+          <div class="form-text">Enter a peer's Tailscale IP to route traffic through it.</div>
+        {% endif %}
+      </div>
+    </div>
+
   </div>
   {% endif %}
 

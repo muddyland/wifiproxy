@@ -39,6 +39,7 @@ Cmnd_Alias WIFIPROXY_WG = \
     /usr/bin/wg showconf *, \
     /usr/bin/tee /etc/wireguard/*, \
     /usr/bin/chmod 600 /etc/wireguard/*, \
+    /usr/bin/chmod 755 /etc/wireguard, \
     /usr/bin/rm /etc/wireguard/*, \
     /usr/bin/systemctl enable wg-quick@*, \
     /usr/bin/systemctl disable wg-quick@*, \

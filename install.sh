@@ -96,9 +96,11 @@ if command -v wg-quick &>/dev/null; then
 else
     info "Installing WireGuard..."
     apt-get install -y -qq wireguard wireguard-tools
-    mkdir -p /etc/wireguard
-    chmod 700 /etc/wireguard
 fi
+# Ensure /etc/wireguard exists and is listable by the app user.
+# Individual .conf files stay at 600 (private keys); only filenames are exposed.
+mkdir -p /etc/wireguard
+chmod 755 /etc/wireguard
 
 # ── 1b. Tailscale ────────────────────────────────────────────────────────────
 if command -v tailscale &>/dev/null; then
