@@ -73,7 +73,7 @@ echo ""
 # ── 1. System packages ──────────────────────────────────────────────────────
 info "Installing system packages..."
 apt-get update -qq
-PKGS=(python3 python3-venv python3-pip rsync git)
+PKGS=(python3 python3-venv python3-pip rsync git curl)
 
 if [[ "$APP_ONLY" != "1" ]]; then
     PKGS+=(dnsmasq iptables iptables-persistent netfilter-persistent)
@@ -88,6 +88,24 @@ if [[ "$APP_ONLY" != "1" ]] && update-alternatives --list iptables &>/dev/null; 
         update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
         info "iptables set to legacy backend."
     fi
+fi
+
+# ── 1a. WireGuard ────────────────────────────────────────────────────────────
+if command -v wg-quick &>/dev/null; then
+    skip "WireGuard already installed."
+else
+    info "Installing WireGuard..."
+    apt-get install -y -qq wireguard wireguard-tools
+    mkdir -p /etc/wireguard
+    chmod 700 /etc/wireguard
+fi
+
+# ── 1b. Tailscale ────────────────────────────────────────────────────────────
+if command -v tailscale &>/dev/null; then
+    skip "Tailscale already installed."
+else
+    info "Installing Tailscale..."
+    curl -fsSL https://tailscale.com/install.sh | sh
 fi
 
 # ── 2. Create app user ──────────────────────────────────────────────────────

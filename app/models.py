@@ -60,6 +60,7 @@ class TailscaleConfig(db.Model):
     _auth_key = db.Column("auth_key", db.Text)
     advertise_exit_node = db.Column(db.Boolean, default=False)
     accept_routes = db.Column(db.Boolean, default=False)
+    accept_dns = db.Column(db.Boolean, default=True)
     advertise_routes = db.Column(db.String(512), default="")
 
     @property

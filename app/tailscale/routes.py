@@ -39,6 +39,7 @@ def save():
     cfg.auth_key = auth_key
     cfg.advertise_exit_node = bool(request.form.get("advertise_exit_node"))
     cfg.accept_routes = bool(request.form.get("accept_routes"))
+    cfg.accept_dns = bool(request.form.get("accept_dns"))
     cfg.advertise_routes = advertise_routes
     db.session.commit()
     flash("Tailscale configuration saved.", "success")
@@ -55,6 +56,7 @@ def connect():
         advertise_exit_node=cfg.advertise_exit_node,
         accept_routes=cfg.accept_routes,
         advertise_routes=cfg.advertise_routes,
+        accept_dns=getattr(cfg, "accept_dns", True),
     )
     if not ok and msg.startswith("https://"):
         session["ts_login_url"] = msg
@@ -79,4 +81,24 @@ def bring_down():
 def ts_logout():
     ok, msg = utils.logout()
     flash(msg or "Logged out of Tailscale.", "info" if ok else "danger")
+    return redirect(url_for("tailscale.index"))
+
+
+@bp.route("/exit-node/set", methods=["POST"])
+@login_required
+def set_exit_node():
+    ip = request.form.get("ip", "").strip()
+    if not ip:
+        flash("No IP provided.", "danger")
+        return redirect(url_for("tailscale.index"))
+    ok, msg = utils.set_exit_node(ip)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("tailscale.index"))
+
+
+@bp.route("/exit-node/clear", methods=["POST"])
+@login_required
+def clear_exit_node():
+    ok, msg = utils.clear_exit_node()
+    flash(msg, "success" if ok else "danger")
     return redirect(url_for("tailscale.index"))

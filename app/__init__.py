@@ -41,6 +41,7 @@ def create_app(config_class=Config):
     from app.tailscale import bp as tailscale_bp
     from app.system import bp as system_bp
     from app.main import bp as main_bp
+    from app.wireguard import bp as wireguard_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -48,6 +49,7 @@ def create_app(config_class=Config):
     app.register_blueprint(dhcp_bp, url_prefix="/dhcp")
     app.register_blueprint(tailscale_bp, url_prefix="/tailscale")
     app.register_blueprint(system_bp, url_prefix="/system")
+    app.register_blueprint(wireguard_bp, url_prefix="/wireguard")
 
     @app.after_request
     def set_security_headers(response):
@@ -72,12 +74,29 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
+        _migrate_db()
         _seed_defaults()
 
     from app.wifi.watchdog import start as start_watchdog
     start_watchdog(app)
 
     return app
+
+
+def _migrate_db():
+    """Idempotent ALTER TABLE migrations for columns added after initial deploy."""
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE tailscale_config ADD COLUMN accept_dns BOOLEAN DEFAULT 1",
+        "ALTER TABLE dhcp_reservation ADD COLUMN nickname VARCHAR(64) DEFAULT ''",
+    ]
+    with db.engine.connect() as conn:
+        for stmt in migrations:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                pass  # column already exists
 
 
 def _seed_defaults():

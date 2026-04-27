@@ -17,7 +17,9 @@
           {% if status.ip %}<span class="font-monospace fs-6">{{ status.ip }}</span>{% endif %}
           {% if status.hostname %}<span class="text-muted">{{ status.hostname }}</span>{% endif %}
           {% if status.exit_node_active %}
-            <span class="badge bg-info ms-2"><i class="fa-solid fa-route me-1"></i>Exit node active</span>
+            <span class="badge bg-info ms-2">
+              <i class="fa-solid fa-route me-1"></i>Exit node: {{ status.exit_node_ip or "active" }}
+            </span>
           {% endif %}
         {% elif status.needs_auth %}
           <span class="badge bg-warning text-dark fs-6 py-2 px-3"><i class="fa-solid fa-key me-1"></i>Needs authentication</span>
@@ -35,6 +37,14 @@
           </a>
           {% if status.installed %}
             {% if status.connected %}
+              {% if status.exit_node_active %}
+                <form method="post" action="{{ url_for('tailscale.clear_exit_node') }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-outline-info btn-sm">
+                    <i class="fa-solid fa-route me-1"></i>Clear Exit Node
+                  </button>
+                </form>
+              {% endif %}
               <form method="post" action="{{ url_for('tailscale.bring_down') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-outline-warning btn-sm">
@@ -172,6 +182,20 @@
                 {% endif %}
               </label>
             </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="accept_dns"
+                     id="accept_dns" {% if cfg.accept_dns %}checked{% endif %}>
+              <label class="form-check-label" for="accept_dns">
+                <span class="fw-semibold">Accept DNS</span><br>
+                <small class="text-muted">Use DNS servers pushed by the control plane.</small>
+                {% if prefs.accept_dns is not none %}
+                  <br><small class="text-info">
+                    <i class="fa-solid fa-circle-dot me-1"></i>Live:
+                    {{ "on" if prefs.accept_dns else "off" }}
+                  </small>
+                {% endif %}
+              </label>
+            </div>
           </div>
 
           <button type="submit" class="btn btn-primary">
@@ -192,17 +216,33 @@
       </div>
       <ul class="list-group list-group-flush">
         {% for peer in status.peers %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
+        <li class="list-group-item d-flex justify-content-between align-items-start py-2">
           <div>
             <span class="fw-semibold">{{ peer.hostname or "unknown" }}</span>
-            {% if peer.exit_node %}<span class="badge bg-info ms-1 small">exit node</span>{% endif %}
+            {% if peer.exit_node %}
+              <span class="badge bg-info ms-1 small">using as exit</span>
+            {% endif %}
+            {% if peer.exit_node_option %}
+              <span class="badge bg-secondary ms-1 small">exit available</span>
+            {% endif %}
             <br><small class="font-monospace text-muted">{{ peer.ip or "" }}</small>
           </div>
-          {% if peer.online %}
-            <span class="badge bg-success rounded-pill">online</span>
-          {% else %}
-            <span class="badge bg-secondary rounded-pill">offline</span>
-          {% endif %}
+          <div class="d-flex flex-column align-items-end gap-1">
+            {% if peer.online %}
+              <span class="badge bg-success rounded-pill">online</span>
+            {% else %}
+              <span class="badge bg-secondary rounded-pill">offline</span>
+            {% endif %}
+            {% if peer.exit_node_option and peer.ip and peer.online and not peer.exit_node %}
+              <form method="post" action="{{ url_for('tailscale.set_exit_node') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="ip" value="{{ peer.ip }}">
+                <button class="btn btn-outline-info btn-sm py-0 px-1" style="font-size:.75rem">
+                  <i class="fa-solid fa-route me-1"></i>Use as exit
+                </button>
+              </form>
+            {% endif %}
+          </div>
         </li>
         {% endfor %}
       </ul>

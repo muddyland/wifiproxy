@@ -10,6 +10,7 @@ from app.validators import (
     validate_cidr_list,
     validate_priority,
     validate_lease_time,
+    validate_tunnel_name,
 )
 
 
@@ -158,3 +159,27 @@ class TestValidateLeaseTime:
         for bad in ["2h", "1d", "never", "", "24H"]:
             with pytest.raises(ValidationError):
                 validate_lease_time(bad)
+
+
+class TestValidateTunnelName:
+    def test_valid(self):
+        assert validate_tunnel_name("wg0") == "wg0"
+        assert validate_tunnel_name("vpn-home") == "vpn-home"
+        assert validate_tunnel_name("wg_office") == "wg_office"
+        assert validate_tunnel_name("a" * 15) == "a" * 15
+        assert validate_tunnel_name("  wg0  ") == "wg0"
+
+    def test_empty(self):
+        with pytest.raises(ValidationError):
+            validate_tunnel_name("")
+        with pytest.raises(ValidationError):
+            validate_tunnel_name("   ")
+
+    def test_too_long(self):
+        with pytest.raises(ValidationError):
+            validate_tunnel_name("a" * 16)
+
+    def test_invalid_chars(self):
+        for bad in ["wg 0", "wg0;evil", "wg0|x", "wg0/etc", "../evil", "wg0`cmd`"]:
+            with pytest.raises(ValidationError):
+                validate_tunnel_name(bad)

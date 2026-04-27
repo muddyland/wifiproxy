@@ -28,8 +28,21 @@ Cmnd_Alias WIFIPROXY_TAILSCALE = \
     /usr/bin/tailscale up *, \
     /usr/bin/tailscale down, \
     /usr/bin/tailscale logout, \
+    /usr/bin/tailscale set *, \
     /usr/bin/tailscale status *, \
     /usr/bin/tailscale prefs *
+
+Cmnd_Alias WIFIPROXY_WG = \
+    /usr/bin/wg-quick up *, \
+    /usr/bin/wg-quick down *, \
+    /usr/bin/wg show *, \
+    /usr/bin/wg showconf *, \
+    /usr/bin/tee /etc/wireguard/*, \
+    /usr/bin/chmod 600 /etc/wireguard/*, \
+    /usr/bin/rm /etc/wireguard/*, \
+    /usr/bin/systemctl enable wg-quick@*, \
+    /usr/bin/systemctl disable wg-quick@*, \
+    /usr/bin/systemctl is-enabled wg-quick@*
 
 Cmnd_Alias WIFIPROXY_LOGS = \
     /usr/bin/journalctl *
@@ -40,4 +53,5 @@ www-data ALL=(root) NOPASSWD: \
     WIFIPROXY_IPTABLES, \
     WIFIPROXY_SYSTEM, \
     WIFIPROXY_TAILSCALE, \
+    WIFIPROXY_WG, \
     WIFIPROXY_LOGS

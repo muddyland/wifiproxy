@@ -11,6 +11,8 @@ _IFACE_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,15}$')
 _HOSTNAME_RE = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$')
 # BSSID: standard MAC address notation
 _BSSID_RE = re.compile(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+# WireGuard tunnel name: Linux interface name rules
+_TUNNEL_NAME_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,15}$')
 
 
 class ValidationError(ValueError):
@@ -100,6 +102,15 @@ def validate_priority(value) -> int:
         return p
     except (TypeError, ValueError) as exc:
         raise ValidationError("Priority must be an integer between 1 and 9999.") from exc
+
+
+def validate_tunnel_name(value: str) -> str:
+    value = value.strip()
+    if not _TUNNEL_NAME_RE.match(value):
+        raise ValidationError(
+            "Tunnel name must be 1-15 characters: letters, numbers, underscore, hyphen."
+        )
+    return value
 
 
 def validate_lease_time(value: str) -> str:

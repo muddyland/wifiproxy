@@ -34,6 +34,7 @@ def get_status() -> dict:
         "hostname": None,
         "peers": [],
         "exit_node_active": False,
+        "exit_node_ip": None,
         "login_server": None,
         "backend_state": None,
         "live_advertise_exit_node": None,
@@ -73,7 +74,9 @@ def get_status() -> dict:
         result["ip"] = ips[0] if ips else None
         result["hostname"] = self_node.get("HostName")
         result["login_server"] = (data.get("CurrentTailnet") or {}).get("MagicDNSSuffix")
-        result["exit_node_active"] = bool(data.get("ExitNodeStatus"))
+        exit_node_status = data.get("ExitNodeStatus") or {}
+        result["exit_node_active"] = bool(exit_node_status)
+        result["exit_node_ip"] = (exit_node_status.get("TailscaleIPs") or [None])[0]
 
         # Live config flags — reflect what tailscale is actually running with
         result["live_advertise_exit_node"] = bool(self_node.get("ExitNodeOption"))
@@ -87,6 +90,7 @@ def get_status() -> dict:
                 "ip": ((peer.get("TailscaleIPs") or [None])[0]),
                 "online": peer.get("Online", False),
                 "exit_node": peer.get("ExitNode", False),
+                "exit_node_option": peer.get("ExitNodeOption", False),
             })
         result["peers"] = peers
 
@@ -106,13 +110,35 @@ def get_prefs() -> dict:
         return {
             "control_url": data.get("ControlURL"),
             "accept_routes": data.get("RouteAll"),
+            "accept_dns": data.get("CorpDNS"),
         }
     except Exception:
         return {}
 
 
+def set_exit_node(ip: str) -> tuple[bool, str]:
+    try:
+        r = _run(["tailscale", "set", f"--exit-node={ip}"])
+        if r.returncode == 0:
+            return True, f"Exit node set to {ip}."
+        return False, (r.stderr or r.stdout).strip()
+    except Exception as exc:
+        return False, str(exc)
+
+
+def clear_exit_node() -> tuple[bool, str]:
+    try:
+        r = _run(["tailscale", "set", "--exit-node="])
+        if r.returncode == 0:
+            return True, "Exit node cleared."
+        return False, (r.stderr or r.stdout).strip()
+    except Exception as exc:
+        return False, str(exc)
+
+
 def login(login_server: str, auth_key: str = "", advertise_exit_node: bool = False,
-          accept_routes: bool = False, advertise_routes: str = "") -> tuple[bool, str]:
+          accept_routes: bool = False, advertise_routes: str = "",
+          accept_dns: bool = True) -> tuple[bool, str]:
     """Run tailscale up. Returns (success, message_or_auth_url)."""
     cmd = ["tailscale", "up", f"--login-server={login_server}", "--reset"]
     if auth_key:
@@ -121,6 +147,8 @@ def login(login_server: str, auth_key: str = "", advertise_exit_node: bool = Fal
         cmd.append("--advertise-exit-node")
     if accept_routes:
         cmd.append("--accept-routes")
+    if not accept_dns:
+        cmd.append("--accept-dns=false")
     if advertise_routes:
         cmd.append(f"--advertise-routes={advertise_routes}")
 
