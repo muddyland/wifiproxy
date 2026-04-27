@@ -95,7 +95,12 @@ if command -v wg-quick &>/dev/null; then
     skip "WireGuard already installed."
 else
     info "Installing WireGuard..."
-    apt-get install -y -qq wireguard wireguard-tools
+    apt-get install -y -qq wireguard wireguard-tools openresolv
+fi
+# openresolv provides resolvconf, needed by wg-quick for DNS = lines in configs.
+# Install it even if wg-quick was already present (may have been missed).
+if ! command -v resolvconf &>/dev/null; then
+    apt-get install -y -qq openresolv
 fi
 # Ensure /etc/wireguard exists and is listable by the app user.
 # Individual .conf files stay at 600 (private keys); only filenames are exposed.

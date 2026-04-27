@@ -74,7 +74,34 @@ def _get_cpu_temp() -> str | None:
 
 def set_hostname(name: str) -> tuple[bool, str]:
     r = _sudo(["hostnamectl", "set-hostname", name])
-    return r.returncode == 0, (r.stderr or r.stdout).strip()
+    if r.returncode != 0:
+        return False, (r.stderr or r.stdout).strip()
+    _sync_hosts_hostname(name)
+    return True, f"Hostname set to {name}."
+
+
+def _sync_hosts_hostname(name: str) -> None:
+    """Keep /etc/hosts in sync so sudo doesn't warn 'unable to resolve host <name>'.
+
+    name must already be validated by validate_hostname() — it must match
+    [a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9] with no slashes or shell-special chars,
+    which is enforced here defensively before building the sed expression.
+    """
+    import re as _re
+    if not _re.match(r'^[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]?$', name):
+        return  # refuse to touch /etc/hosts with an unexpected name
+    has_line = subprocess.run(
+        ["grep", "-q", r"^127\.0\.1\.1", "/etc/hosts"],
+        capture_output=True,
+    ).returncode == 0
+    if has_line:
+        _sudo(["sed", "-i", rf"s/^127\.0\.1\.1\b.*/127.0.1.1\t{name}/", "/etc/hosts"])
+    else:
+        subprocess.run(
+            ["sudo", "tee", "-a", "/etc/hosts"],
+            input=f"\n127.0.1.1\t{name}\n",
+            capture_output=True, text=True, encoding="utf-8",
+        )
 
 
 def get_logs(lines: int = 100, unit: str = "") -> str:

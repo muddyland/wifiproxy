@@ -85,6 +85,24 @@ class TestSystemLogs:
             auth_client.get("/system/logs?lines=9999")
         mock_fn.assert_called_once_with(500, "")
 
+    def test_non_integer_lines_defaults_to_100(self, auth_client):
+        with patch("app.system.utils.get_logs", return_value="") as mock_fn:
+            r = auth_client.get("/system/logs?lines=abc")
+        assert r.status_code == 200
+        mock_fn.assert_called_once_with(100, "")
+
+    def test_valid_unit_filter(self, auth_client):
+        with patch("app.system.utils.get_logs", return_value="log line") as mock_fn:
+            auth_client.get("/system/logs?unit=wifiproxy")
+        mock_fn.assert_called_once_with(100, "wifiproxy")
+
+    def test_injection_in_unit_silently_dropped(self, auth_client):
+        with patch("app.system.utils.get_logs", return_value="") as mock_fn:
+            r = auth_client.get("/system/logs?unit=wifiproxy;id")
+        assert r.status_code == 200
+        # Invalid unit falls back to ""
+        mock_fn.assert_called_once_with(100, "")
+
 
 class TestReboot:
     def test_reboot_calls_utility(self, auth_client):

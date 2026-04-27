@@ -4,7 +4,7 @@ from app.tailscale import bp
 from app.tailscale import utils
 from app.models import TailscaleConfig
 from app import db
-from app.validators import ValidationError, validate_url, validate_cidr_list
+from app.validators import ValidationError, validate_url, validate_cidr_list, validate_ip
 
 
 @bp.route("/")
@@ -90,6 +90,11 @@ def set_exit_node():
     ip = request.form.get("ip", "").strip()
     if not ip:
         flash("No IP provided.", "danger")
+        return redirect(url_for("tailscale.index"))
+    try:
+        ip = validate_ip(ip, "Exit node IP")
+    except ValidationError as e:
+        flash(str(e), "danger")
         return redirect(url_for("tailscale.index"))
     ok, msg = utils.set_exit_node(ip)
     flash(msg, "success" if ok else "danger")

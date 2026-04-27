@@ -19,6 +19,8 @@ Cmnd_Alias WIFIPROXY_IPTABLES = \
 
 Cmnd_Alias WIFIPROXY_SYSTEM = \
     /usr/bin/hostnamectl set-hostname *, \
+    /usr/bin/sed -i * /etc/hosts, \
+    /usr/bin/tee -a /etc/hosts, \
     /usr/bin/apt-get update *, \
     /usr/bin/apt-get upgrade *, \
     /usr/bin/systemctl reboot, \

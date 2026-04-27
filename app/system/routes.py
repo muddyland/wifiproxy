@@ -2,7 +2,7 @@ from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required
 from app.system import bp
 from app.system import utils
-from app.validators import ValidationError, validate_hostname
+from app.validators import ValidationError, validate_hostname, validate_service_name
 
 
 @bp.route("/")
@@ -42,8 +42,14 @@ def check_updates():
 @bp.route("/logs")
 @login_required
 def logs():
-    lines = min(int(request.args.get("lines", 100)), 500)
-    unit = request.args.get("unit", "")
+    try:
+        lines = min(int(request.args.get("lines", 100)), 500)
+    except (ValueError, TypeError):
+        lines = 100
+    try:
+        unit = validate_service_name(request.args.get("unit", ""))
+    except ValidationError:
+        unit = ""
     return jsonify({"logs": utils.get_logs(lines, unit)})
 
 

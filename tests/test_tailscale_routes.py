@@ -211,6 +211,14 @@ class TestSetExitNode:
                              follow_redirects=True)
         assert b"No IP" in r.data
 
+    def test_set_exit_node_invalid_ip_rejected(self, auth_client):
+        for bad_ip in ["not-an-ip", "999.999.999.999", "100.64.0.1; rm -rf /"]:
+            r = auth_client.post("/tailscale/exit-node/set",
+                                 data={"ip": bad_ip},
+                                 follow_redirects=True)
+            assert r.status_code == 200
+            assert b"valid IPv4" in r.data or b"not a valid" in r.data
+
     def test_set_exit_node_failure(self, auth_client):
         with patch("app.tailscale.utils.set_exit_node",
                    return_value=(False, "node not found")):

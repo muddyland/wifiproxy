@@ -11,6 +11,7 @@ from app.validators import (
     validate_priority,
     validate_lease_time,
     validate_tunnel_name,
+    validate_service_name,
 )
 
 
@@ -183,3 +184,20 @@ class TestValidateTunnelName:
         for bad in ["wg 0", "wg0;evil", "wg0|x", "wg0/etc", "../evil", "wg0`cmd`"]:
             with pytest.raises(ValidationError):
                 validate_tunnel_name(bad)
+
+
+class TestValidateServiceName:
+    def test_valid(self):
+        assert validate_service_name("wifiproxy") == "wifiproxy"
+        assert validate_service_name("wg-quick@wg0") == "wg-quick@wg0"
+        assert validate_service_name("NetworkManager") == "NetworkManager"
+        assert validate_service_name("dnsmasq.service") == "dnsmasq.service"
+        assert validate_service_name("") == ""
+
+    def test_strips_whitespace(self):
+        assert validate_service_name("  wifiproxy  ") == "wifiproxy"
+
+    def test_injection_rejected(self):
+        for bad in ["wifiproxy;id", "svc|cat /etc/passwd", "svc$(id)", "svc`id`", "svc\nother"]:
+            with pytest.raises(ValidationError):
+                validate_service_name(bad)

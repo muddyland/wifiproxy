@@ -13,6 +13,8 @@ _HOSTNAME_RE = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$')
 _BSSID_RE = re.compile(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
 # WireGuard tunnel name: Linux interface name rules
 _TUNNEL_NAME_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,15}$')
+# systemd service unit name: letters, digits, : - _ . @ /  (covers wg-quick@wg0, etc.)
+_SERVICE_NAME_RE = re.compile(r'^[a-zA-Z0-9:_\-\.@/]{1,128}$')
 
 
 class ValidationError(ValueError):
@@ -110,6 +112,16 @@ def validate_tunnel_name(value: str) -> str:
         raise ValidationError(
             "Tunnel name must be 1-15 characters: letters, numbers, underscore, hyphen."
         )
+    return value
+
+
+def validate_service_name(value: str) -> str:
+    """Validate a systemd unit name passed to journalctl -u."""
+    value = value.strip()
+    if not value:
+        return value
+    if not _SERVICE_NAME_RE.match(value):
+        raise ValidationError(f"Service name '{value}' contains invalid characters.")
     return value
 
 
