@@ -39,6 +39,54 @@ def is_autostart(name: str) -> bool:
         return False
 
 
+def _get_lan_iface() -> str:
+    """Read LAN interface from DhcpConfig; fall back to eth0."""
+    try:
+        from app.models import DhcpConfig
+        cfg = DhcpConfig.query.first()
+        return cfg.lan_interface if cfg else "eth0"
+    except Exception:
+        return "eth0"
+
+
+def _apply_nat_rules(action: str, wg_iface: str, lan_iface: str) -> None:
+    """Add (action='-A') or remove (action='-D') the three iptables rules that
+    allow LAN clients to reach the internet through a WireGuard tunnel.
+
+    wg-quick sets up policy routing so forwarded packets use wg0, but the
+    FORWARD chain and NAT table still need explicit entries.
+    """
+    rule_specs = [
+        # Masquerade LAN traffic leaving through the WireGuard interface
+        ["-t", "nat", action, "POSTROUTING", "-o", wg_iface, "-j", "MASQUERADE"],
+        # Allow forwarding from LAN into the tunnel
+        [action, "FORWARD", "-i", lan_iface, "-o", wg_iface, "-j", "ACCEPT"],
+        # Allow established/related traffic back from the tunnel to LAN
+        [action, "FORWARD", "-i", wg_iface, "-o", lan_iface,
+         "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+    ]
+    for spec in rule_specs:
+        if action == "-A":
+            check = ["-C" if s == action else s for s in spec]
+            r = subprocess.run(["sudo", "iptables"] + check, capture_output=True)
+            if r.returncode == 0:
+                continue  # rule already exists — skip to avoid duplicates
+        subprocess.run(["sudo", "iptables"] + spec, capture_output=True)
+
+
+def has_nat_rules(name: str) -> bool:
+    """Return True if the MASQUERADE rule for this tunnel is in iptables."""
+    try:
+        r = subprocess.run(
+            ["sudo", "iptables", "-t", "nat", "-C", "POSTROUTING",
+             "-o", name, "-j", "MASQUERADE"],
+            capture_output=True,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 def get_tunnels() -> list[dict]:
     tunnels = []
     if not is_installed():
@@ -48,20 +96,25 @@ def get_tunnels() -> list[dict]:
         try:
             conf_files = sorted(WG_DIR.glob("*.conf"))
         except PermissionError:
-            # /etc/wireguard is mode 700 until install.sh runs; show active tunnels only
             current_app.logger.warning(
                 "Cannot list /etc/wireguard (permission denied). "
                 "Run: sudo chmod 755 /etc/wireguard"
             )
             for name in sorted(active):
-                tunnels.append({"name": name, "active": True, "autostart": is_autostart(name)})
+                tunnels.append({
+                    "name": name, "active": True,
+                    "autostart": is_autostart(name),
+                    "routing": has_nat_rules(name),
+                })
             return tunnels
         for conf in conf_files:
             name = conf.stem
+            active_now = name in active
             tunnels.append({
                 "name": name,
-                "active": name in active,
+                "active": active_now,
                 "autostart": is_autostart(name),
+                "routing": has_nat_rules(name) if active_now else False,
             })
     except Exception as exc:
         current_app.logger.error("WireGuard get_tunnels: %s", exc)
@@ -79,7 +132,11 @@ def get_stats(name: str) -> str:
 def connect(name: str) -> tuple[bool, str]:
     try:
         r = _sudo(["wg-quick", "up", name], timeout=30)
-        return r.returncode == 0, (r.stderr or r.stdout).strip()
+        if r.returncode != 0:
+            return False, (r.stderr or r.stdout).strip()
+        lan_iface = _get_lan_iface()
+        _apply_nat_rules("-A", name, lan_iface)
+        return True, f"Connected {name}. LAN traffic routing active."
     except subprocess.TimeoutExpired:
         return False, "wg-quick up timed out."
     except Exception as exc:
@@ -88,6 +145,8 @@ def connect(name: str) -> tuple[bool, str]:
 
 def disconnect(name: str) -> tuple[bool, str]:
     try:
+        lan_iface = _get_lan_iface()
+        _apply_nat_rules("-D", name, lan_iface)
         r = _sudo(["wg-quick", "down", name], timeout=30)
         return r.returncode == 0, (r.stderr or r.stdout).strip()
     except subprocess.TimeoutExpired:
@@ -116,8 +175,6 @@ def save_config(name: str, content: str) -> tuple[bool, str]:
             err = r.stderr.strip() or "Could not write config — check sudoers rules."
             return False, err
         _sudo(["chmod", "600", str(conf_path)])
-        # Ensure the directory is world-readable so the app can list tunnels.
-        # /etc/wireguard defaults to mode 700; individual .conf files stay at 600.
         _sudo(["chmod", "755", str(WG_DIR)])
         return True, f"Config saved as {name}.conf"
     except Exception as exc:

@@ -109,22 +109,109 @@ class TestGetStats:
         assert "boom" in result
 
 
+class TestApplyNatRules:
+    def _run(self, action, wg_iface="wg0", lan_iface="eth0"):
+        calls = []
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 1  # simulate "rule not present" for -C checks
+            return r
+        with patch("subprocess.run", side_effect=fake_run):
+            utils._apply_nat_rules(action, wg_iface, lan_iface)
+        return calls
+
+    def test_add_inserts_three_rules(self):
+        calls = self._run("-A")
+        add_calls = [c for c in calls if "-A" in c]
+        assert len(add_calls) == 3
+
+    def test_add_includes_masquerade(self):
+        calls = self._run("-A")
+        assert any("MASQUERADE" in c for c in calls)
+
+    def test_add_includes_forward_rules(self):
+        calls = self._run("-A")
+        forward_calls = [c for c in calls if "FORWARD" in c]
+        assert len(forward_calls) >= 2
+
+    def test_add_skips_existing_rule(self):
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            # -C check succeeds → rule already exists
+            r.returncode = 0 if "-C" in cmd else 1
+            return r
+        with patch("subprocess.run", side_effect=fake_run) as m:
+            utils._apply_nat_rules("-A", "wg0", "eth0")
+        # No -A calls should have been made since all -C checks passed
+        add_calls = [c for c in [call[0][0] for call in m.call_args_list] if "-A" in c]
+        assert add_calls == []
+
+    def test_delete_does_not_check_first(self):
+        calls = []
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            return r
+        with patch("subprocess.run", side_effect=fake_run):
+            utils._apply_nat_rules("-D", "wg0", "eth0")
+        check_calls = [c for c in calls if "-C" in c]
+        assert check_calls == []
+
+
+class TestHasNatRules:
+    def test_returns_true_when_rule_exists(self):
+        with patch("subprocess.run", return_value=MagicMock(returncode=0)):
+            assert utils.has_nat_rules("wg0") is True
+
+    def test_returns_false_when_rule_absent(self):
+        with patch("subprocess.run", return_value=MagicMock(returncode=1)):
+            assert utils.has_nat_rules("wg0") is False
+
+    def test_returns_false_on_exception(self):
+        with patch("subprocess.run", side_effect=Exception("fail")):
+            assert utils.has_nat_rules("wg0") is False
+
+
 class TestConnect:
     def test_success(self):
-        with patch("app.wireguard.utils._sudo", return_value=_completed("", "", 0)):
-            ok, _ = utils.connect("wg0")
+        with patch("app.wireguard.utils._sudo", return_value=_completed("", "", 0)), \
+             patch("app.wireguard.utils._apply_nat_rules"), \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
+            ok, msg = utils.connect("wg0")
         assert ok is True
+        assert "LAN" in msg
 
     def test_failure(self):
         with patch("app.wireguard.utils._sudo",
-                   return_value=_completed("", "RTNETLINK: File exists", 1)):
+                   return_value=_completed("", "RTNETLINK: File exists", 1)), \
+             patch("app.wireguard.utils._apply_nat_rules"), \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
             ok, msg = utils.connect("wg0")
         assert ok is False
         assert "RTNETLINK" in msg
 
+    def test_nat_rules_added_on_success(self):
+        with patch("app.wireguard.utils._sudo", return_value=_completed("", "", 0)), \
+             patch("app.wireguard.utils._apply_nat_rules") as mock_nat, \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
+            utils.connect("wg0")
+        mock_nat.assert_called_once_with("-A", "wg0", "eth0")
+
+    def test_nat_rules_not_added_on_failure(self):
+        with patch("app.wireguard.utils._sudo",
+                   return_value=_completed("", "error", 1)), \
+             patch("app.wireguard.utils._apply_nat_rules") as mock_nat, \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
+            utils.connect("wg0")
+        mock_nat.assert_not_called()
+
     def test_timeout(self):
         with patch("app.wireguard.utils._sudo",
-                   side_effect=subprocess.TimeoutExpired([], 30)):
+                   side_effect=subprocess.TimeoutExpired([], 30)), \
+             patch("app.wireguard.utils._apply_nat_rules"), \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
             ok, msg = utils.connect("wg0")
         assert ok is False
         assert "timed out" in msg.lower()
@@ -132,13 +219,31 @@ class TestConnect:
 
 class TestDisconnect:
     def test_success(self):
-        with patch("app.wireguard.utils._sudo", return_value=_completed("", "", 0)):
+        with patch("app.wireguard.utils._sudo", return_value=_completed("", "", 0)), \
+             patch("app.wireguard.utils._apply_nat_rules"), \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
             ok, _ = utils.disconnect("wg0")
         assert ok is True
 
+    def test_nat_rules_removed_before_down(self):
+        order = []
+        def fake_nat(action, *a):
+            order.append(f"nat:{action}")
+        def fake_sudo(cmd, **kwargs):
+            order.append(f"sudo:{cmd[0]}")
+            return _completed("", "", 0)
+        with patch("app.wireguard.utils._apply_nat_rules", side_effect=fake_nat), \
+             patch("app.wireguard.utils._sudo", side_effect=fake_sudo), \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
+            utils.disconnect("wg0")
+        assert order[0] == "nat:-D"
+        assert "sudo:wg-quick" in order[1]
+
     def test_failure(self):
         with patch("app.wireguard.utils._sudo",
-                   return_value=_completed("", "interface not found", 1)):
+                   return_value=_completed("", "interface not found", 1)), \
+             patch("app.wireguard.utils._apply_nat_rules"), \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
             ok, msg = utils.disconnect("wg0")
         assert ok is False
 
