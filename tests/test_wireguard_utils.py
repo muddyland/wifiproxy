@@ -301,7 +301,9 @@ class TestDelete:
             calls.append(cmd)
             return _completed()
         with patch("app.wireguard.utils.get_active_interfaces", return_value={"wg0"}), \
-             patch("app.wireguard.utils._sudo", side_effect=fake_sudo):
+             patch("app.wireguard.utils._sudo", side_effect=fake_sudo), \
+             patch("app.wireguard.utils._apply_nat_rules"), \
+             patch("app.wireguard.utils._get_lan_iface", return_value="eth0"):
             utils.delete("wg0")
         # First call should be wg-quick down, second should be rm
         assert any("down" in c for c in calls[0])
