@@ -241,6 +241,7 @@ class TestSetExitNode:
         assert ok is True
         cmd = m.call_args[0][0]
         assert "--exit-node=100.64.0.2" in cmd
+        assert "--exit-node-allow-lan-access=true" in cmd
 
     def test_util_failure(self, app):
         from app.tailscale import utils
@@ -288,6 +289,7 @@ class TestClearExitNode:
         assert ok is True
         cmd = m.call_args[0][0]
         assert "--exit-node=" in cmd
+        assert "--exit-node-allow-lan-access=false" in cmd
 
 
 class TestExitNodePeers:

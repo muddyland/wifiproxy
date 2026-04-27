@@ -118,7 +118,8 @@ def get_prefs() -> dict:
 
 def set_exit_node(ip: str) -> tuple[bool, str]:
     try:
-        r = _run(["tailscale", "set", f"--exit-node={ip}"])
+        r = _run(["tailscale", "set", f"--exit-node={ip}",
+                  "--exit-node-allow-lan-access=true"])
         if r.returncode == 0:
             return True, f"Exit node set to {ip}."
         return False, (r.stderr or r.stdout).strip()
@@ -128,7 +129,8 @@ def set_exit_node(ip: str) -> tuple[bool, str]:
 
 def clear_exit_node() -> tuple[bool, str]:
     try:
-        r = _run(["tailscale", "set", "--exit-node="])
+        r = _run(["tailscale", "set", "--exit-node=",
+                  "--exit-node-allow-lan-access=false"])
         if r.returncode == 0:
             return True, "Exit node cleared."
         return False, (r.stderr or r.stdout).strip()
