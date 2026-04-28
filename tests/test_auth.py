@@ -5,9 +5,21 @@ from app import db
 
 class TestLogin:
     def test_login_page_renders(self, client):
-        r = client.get("/login")
+        # Fresh install: GET /login redirects to /setup
+        r = client.get("/login", follow_redirects=True)
         assert r.status_code == 200
         assert b"WiFi Bridge" in r.data
+
+    def test_login_page_renders_after_setup(self, client, app):
+        with app.app_context():
+            from app.models import User
+            u = User.query.filter_by(username="admin").first()
+            u.set_password("securepass1")
+            from app import db
+            db.session.commit()
+        r = client.get("/login")
+        assert r.status_code == 200
+        assert b"Sign in" in r.data
 
     def test_login_success(self, client, app):
         with app.app_context():

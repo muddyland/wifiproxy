@@ -42,6 +42,7 @@ def create_app(config_class=Config):
     from app.system import bp as system_bp
     from app.main import bp as main_bp
     from app.wireguard import bp as wireguard_bp
+    from app.backup import bp as backup_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -50,6 +51,7 @@ def create_app(config_class=Config):
     app.register_blueprint(tailscale_bp, url_prefix="/tailscale")
     app.register_blueprint(system_bp, url_prefix="/system")
     app.register_blueprint(wireguard_bp, url_prefix="/wireguard")
+    app.register_blueprint(backup_bp)
 
     @app.after_request
     def set_security_headers(response):

@@ -11,6 +11,10 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
 
+    from app.backup.utils import is_fresh_install
+    if request.method == "GET" and is_fresh_install():
+        return redirect(url_for("backup.setup"))
+
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
