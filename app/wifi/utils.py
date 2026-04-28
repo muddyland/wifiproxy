@@ -1,4 +1,5 @@
 import subprocess
+import uuid
 from typing import Optional
 from flask import current_app
 
@@ -9,6 +10,14 @@ def _run(cmd: list, timeout: int = 30) -> subprocess.CompletedProcess:
 
 def _sudo(cmd: list, timeout: int = 30) -> subprocess.CompletedProcess:
     return _run(["sudo"] + cmd, timeout=timeout)
+
+
+def _sudo_write(path: str, content: str) -> subprocess.CompletedProcess:
+    """Write content to a root-owned file via stdin, keeping content out of argv."""
+    return subprocess.run(
+        ["sudo", "tee", path],
+        input=content, capture_output=True, text=True, encoding="utf-8", timeout=10,
+    )
 
 
 def _flush_entry(entry: dict, networks: list, seen: set) -> None:
@@ -139,23 +148,65 @@ def _delete_nm_profile_for_ssid(ssid: str) -> None:
         pass
 
 
-def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool, str]:
-    """Connect to a WiFi network via nmcli.
+def _build_nm_keyfile(ssid: str, password: str, iface: str, bssid: Optional[str]) -> str:
+    """Build a NetworkManager keyfile profile. Password stays in file content, not argv."""
+    conn_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"wifiproxy.{ssid}"))
+    lines = [
+        "[connection]",
+        f"id={ssid}",
+        f"uuid={conn_uuid}",
+        "type=wifi",
+        f"interface-name={iface}",
+        "",
+        "[wifi]",
+        "mode=infrastructure",
+        f"ssid={ssid}",
+    ]
+    if bssid:
+        lines.append(f"bssid={bssid}")
+    if password:
+        lines += [
+            "",
+            "[wifi-security]",
+            "auth-alg=open",
+            "key-mgmt=wpa-psk",
+            f"psk={password}",
+        ]
+    lines += [
+        "",
+        "[ipv4]",
+        "method=auto",
+        "",
+        "[ipv6]",
+        "method=auto",
+        "addr-gen-mode=stable-privacy",
+    ]
+    return "\n".join(lines) + "\n"
 
-    Any existing NM profile for this SSID is removed first so that nmcli
-    always creates a fresh, correctly-structured profile.  This avoids
-    'key-mgmt: property is missing' errors from profiles created by other
-    tools or earlier installs.
+
+def connect(ssid: str, password: str, bssid: Optional[str] = None) -> tuple[bool, str]:
+    """Connect to a WiFi network.
+
+    Writes an NM keyfile via stdin so the password never appears in argv
+    (sudo logs the full command line, which would expose plaintext passwords).
+    Any existing NM profile for this SSID is removed first.
     """
     wan = current_app.config["WAN_INTERFACE"]
-    cmd = ["nmcli", "dev", "wifi", "connect", ssid, "ifname", wan]
-    if password:
-        cmd += ["password", password]
-    if bssid:
-        cmd += ["bssid", bssid]
     try:
         _delete_nm_profile_for_ssid(ssid)
-        r = _sudo(cmd, timeout=30)
+
+        conn_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"wifiproxy.{ssid}"))
+        profile_path = f"/etc/NetworkManager/system-connections/{conn_uuid}.nmconnection"
+        keyfile = _build_nm_keyfile(ssid, password, wan, bssid)
+
+        r = _sudo_write(profile_path, keyfile)
+        if r.returncode != 0:
+            return False, "Failed to write connection profile."
+
+        _sudo(["chmod", "600", profile_path], timeout=5)
+        _sudo(["nmcli", "connection", "reload"], timeout=10)
+
+        r = _sudo(["nmcli", "connection", "up", ssid, "ifname", wan], timeout=30)
         if r.returncode == 0:
             return True, "Connected successfully."
         return False, r.stderr.strip() or r.stdout.strip()

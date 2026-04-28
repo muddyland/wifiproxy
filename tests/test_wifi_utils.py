@@ -112,31 +112,44 @@ class TestGetCurrentConnection:
 class TestConnect:
     def test_connect_success(self, app):
         with app.app_context():
-            with patch("app.wifi.utils._run", return_value=_completed("Device wlan0 connected")):
-                ok, msg = utils.connect("HomeNet", "password123")
+            with patch("app.wifi.utils._sudo_write", return_value=_completed()):
+                with patch("app.wifi.utils._run", return_value=_completed()):
+                    ok, msg = utils.connect("HomeNet", "password123")
         assert ok is True
+
+    def test_password_not_in_argv(self, app):
+        with app.app_context():
+            with patch("app.wifi.utils._sudo_write", return_value=_completed()) as mock_write:
+                with patch("app.wifi.utils._run", return_value=_completed()) as mock_run:
+                    utils.connect("HomeNet", "s3cr3t_pass")
+        for call in mock_run.call_args_list:
+            assert "s3cr3t_pass" not in call[0][0]
+        keyfile_content = mock_write.call_args[0][1]
+        assert "s3cr3t_pass" in keyfile_content
 
     def test_connect_failure(self, app):
         with app.app_context():
-            with patch("app.wifi.utils._run", return_value=_completed("", "Error: wrong key", 1)):
-                ok, msg = utils.connect("HomeNet", "wrongpass")
+            with patch("app.wifi.utils._sudo_write", return_value=_completed()):
+                with patch("app.wifi.utils._run", return_value=_completed("", "Error: wrong key", 1)):
+                    ok, msg = utils.connect("HomeNet", "wrongpass")
         assert ok is False
         assert "wrong key" in msg
 
     def test_connect_timeout(self, app):
         with app.app_context():
-            with patch("app.wifi.utils._run", side_effect=subprocess.TimeoutExpired([], 30)):
-                ok, msg = utils.connect("HomeNet", "pass")
+            with patch("app.wifi.utils._sudo_write", return_value=_completed()):
+                with patch("app.wifi.utils._run", side_effect=subprocess.TimeoutExpired([], 30)):
+                    ok, msg = utils.connect("HomeNet", "pass")
         assert ok is False
         assert "timed out" in msg.lower()
 
     def test_connect_with_bssid(self, app):
         with app.app_context():
-            with patch("app.wifi.utils._run", return_value=_completed("connected")) as mock_run:
-                utils.connect("HomeNet", "pass", bssid="AA:BB:CC:DD:EE:FF")
-        cmd = mock_run.call_args[0][0]
-        assert "bssid" in cmd
-        assert "AA:BB:CC:DD:EE:FF" in cmd
+            with patch("app.wifi.utils._sudo_write", return_value=_completed()) as mock_write:
+                with patch("app.wifi.utils._run", return_value=_completed("connected")):
+                    utils.connect("HomeNet", "pass", bssid="AA:BB:CC:DD:EE:FF")
+        keyfile_content = mock_write.call_args[0][1]
+        assert "AA:BB:CC:DD:EE:FF" in keyfile_content
 
 
 class TestDisconnect:
