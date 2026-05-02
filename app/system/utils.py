@@ -1,5 +1,6 @@
 import subprocess
 from datetime import datetime, timezone
+from pathlib import Path
 import psutil
 
 
@@ -160,6 +161,53 @@ def shutdown() -> tuple[bool, str]:
         return True, "Shutting down..."
     except Exception as e:
         return False, str(e)
+
+
+def dig_lookup(domain: str, record_type: str = "A", server: str = "") -> dict:
+    cmd = ["dig", "+noall", "+answer", "+authority", "+question", domain, record_type]
+    if server:
+        cmd.insert(1, f"@{server}")
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=10)
+        output = r.stdout or r.stderr or "(no output)"
+        return {"output": output, "returncode": r.returncode}
+    except subprocess.TimeoutExpired:
+        return {"output": "dig timed out after 10 seconds.", "returncode": 1}
+    except FileNotFoundError:
+        return {"output": "dig not found — install dnsutils: sudo apt-get install dnsutils", "returncode": 1}
+    except Exception as exc:
+        return {"output": str(exc), "returncode": 1}
+
+
+def get_host_dns() -> tuple[str, str]:
+    """Return the first two nameservers from /etc/resolv.conf."""
+    try:
+        servers = []
+        for line in Path("/etc/resolv.conf").read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("nameserver") and len(line.split()) >= 2:
+                servers.append(line.split()[1])
+        return (servers[0] if servers else ""), (servers[1] if len(servers) > 1 else "")
+    except Exception:
+        return "", ""
+
+
+def set_host_dns(dns1: str, dns2: str) -> tuple[bool, str]:
+    """Overwrite /etc/resolv.conf with the given nameservers."""
+    lines = [f"nameserver {dns1}"]
+    if dns2:
+        lines.append(f"nameserver {dns2}")
+    content = "\n".join(lines) + "\n"
+    try:
+        r = subprocess.run(
+            ["sudo", "tee", "/etc/resolv.conf"],
+            input=content, capture_output=True, text=True, encoding="utf-8",
+        )
+        if r.returncode != 0:
+            return False, r.stderr.strip()
+        return True, "Host DNS servers updated."
+    except Exception as exc:
+        return False, str(exc)
 
 
 _MONITORED_SERVICES = ["wifiproxy", "dnsmasq", "NetworkManager", "netfilter-persistent", "tailscaled"]

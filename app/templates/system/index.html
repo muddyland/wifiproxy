@@ -81,6 +81,40 @@
       </div>
     </div>
 
+    <!-- DNS Servers -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="fa-solid fa-server me-2"></i>DNS Servers
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('system.save_host_dns') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Primary DNS</label>
+              <input type="text" name="dns1" class="form-control font-monospace"
+                     value="{{ host_dns1 }}" required
+                     placeholder="8.8.8.8"
+                     pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold">Secondary DNS</label>
+              <input type="text" name="dns2" class="form-control font-monospace"
+                     value="{{ host_dns2 }}"
+                     placeholder="8.8.4.4"
+                     pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}">
+            </div>
+          </div>
+          <button class="btn btn-outline-primary btn-sm">
+            <i class="fa-solid fa-floppy-disk me-1"></i>Apply
+          </button>
+          <div class="form-text mt-2">
+            Updates <code>/etc/resolv.conf</code>, dnsmasq upstream forwarders, and DHCP DNS option.
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Power -->
     <div class="card shadow-sm border-danger">
       <div class="card-header fw-semibold text-danger">
@@ -181,6 +215,54 @@
   </div>
 
 </div>
+
+<!-- DNS Lookup (full-width row) -->
+<div class="row g-4 mt-0">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="fa-solid fa-magnifying-glass me-2"></i>DNS Lookup
+      </div>
+      <div class="card-body">
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-md-5">
+            <label class="form-label small fw-semibold">Domain / IP</label>
+            <input type="text" id="dig-domain" class="form-control font-monospace"
+                   placeholder="example.com">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small fw-semibold">Type</label>
+            <select id="dig-type" class="form-select font-monospace">
+              <option value="A" selected>A</option>
+              <option value="AAAA">AAAA</option>
+              <option value="MX">MX</option>
+              <option value="TXT">TXT</option>
+              <option value="NS">NS</option>
+              <option value="CNAME">CNAME</option>
+              <option value="PTR">PTR</option>
+              <option value="SOA">SOA</option>
+              <option value="CAA">CAA</option>
+              <option value="SRV">SRV</option>
+              <option value="ANY">ANY</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold">Server (optional)</label>
+            <input type="text" id="dig-server" class="form-control font-monospace"
+                   placeholder="1.1.1.1">
+          </div>
+          <div class="col-12 col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100" id="dig-btn">
+              <i class="fa-solid fa-terminal me-1"></i>Lookup
+            </button>
+          </div>
+        </div>
+        <pre id="dig-output" class="log-box mb-0 p-3 small" style="min-height:100px">Enter a domain and click Lookup.</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -217,5 +299,43 @@ async function loadLogs() {
 }
 
 document.getElementById('refresh-logs').addEventListener('click', loadLogs);
+
+document.getElementById('dig-btn').addEventListener('click', async function() {
+  const btn = this;
+  const domain = document.getElementById('dig-domain').value.trim();
+  const type = document.getElementById('dig-type').value;
+  const server = document.getElementById('dig-server').value.trim();
+  const output = document.getElementById('dig-output');
+
+  if (!domain) {
+    output.textContent = 'Error: enter a domain name.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Running...';
+  output.textContent = 'Running dig...';
+
+  try {
+    const params = new URLSearchParams({ domain, type });
+    if (server) params.set('server', server);
+    const r = await fetch(`{{ url_for('system.dns_lookup') }}?${params}`);
+    const d = await r.json();
+    if (d.error) {
+      output.textContent = 'Error: ' + d.error;
+    } else {
+      output.textContent = d.output || '(no output)';
+    }
+  } catch (e) {
+    output.textContent = 'Request failed: ' + e;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-terminal me-1"></i>Lookup';
+});
+
+document.getElementById('dig-domain').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('dig-btn').click();
+});
 </script>
 {% endblock %}

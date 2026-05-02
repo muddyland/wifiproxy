@@ -15,6 +15,11 @@ _BSSID_RE = re.compile(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
 _TUNNEL_NAME_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,15}$')
 # systemd service unit name: letters, digits, : - _ . @ /  (covers wg-quick@wg0, etc.)
 _SERVICE_NAME_RE = re.compile(r'^[a-zA-Z0-9:_\-\.@/]{1,128}$')
+# Domain/FQDN for dig: labels of a-z0-9 and hyphens separated by dots
+_DOMAIN_RE = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9\-\.]{0,251}[a-zA-Z0-9])?\.?$')
+_DNS_RECORD_TYPES = frozenset({
+    "A", "AAAA", "MX", "TXT", "NS", "CNAME", "PTR", "SOA", "ANY", "SRV", "CAA"
+})
 
 
 class ValidationError(ValueError):
@@ -122,6 +127,35 @@ def validate_service_name(value: str) -> str:
         return value
     if not _SERVICE_NAME_RE.match(value):
         raise ValidationError(f"Service name '{value}' contains invalid characters.")
+    return value
+
+
+def validate_domain(value: str) -> str:
+    """Validate a domain name or IPv4 address suitable for a dig query."""
+    value = value.strip()
+    if not value:
+        raise ValidationError("Domain cannot be empty.")
+    if len(value) > 255:
+        raise ValidationError("Domain too long (max 255 characters).")
+    try:
+        ipaddress.IPv4Address(value)
+        return value
+    except ValueError:
+        pass
+    if ".." in value:
+        raise ValidationError(f"'{value}' is not a valid domain name.")
+    if not _DOMAIN_RE.match(value):
+        raise ValidationError(f"'{value}' is not a valid domain name.")
+    return value
+
+
+def validate_dns_record_type(value: str) -> str:
+    value = value.strip().upper()
+    if value not in _DNS_RECORD_TYPES:
+        raise ValidationError(
+            f"Unsupported record type '{value}'. "
+            f"Allowed: {', '.join(sorted(_DNS_RECORD_TYPES))}."
+        )
     return value
 
 

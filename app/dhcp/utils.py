@@ -73,6 +73,8 @@ def write_dnsmasq_config(cfg) -> tuple[bool, str]:
         f"dhcp-range={cfg.range_start},{cfg.range_end},{cfg.subnet_mask},{cfg.lease_time}\n"
         f"dhcp-option=option:router,{cfg.gateway}\n"
         f"dhcp-option=option:dns-server,{cfg.dns1},{cfg.dns2}\n"
+        f"server={cfg.dns1}\n"
+        f"server={cfg.dns2}\n"
         f"dhcp-leasefile=/var/lib/dnsmasq/dnsmasq.leases\n"
     )
     from app.models import DhcpReservation

@@ -73,7 +73,7 @@ echo ""
 # ── 1. System packages ──────────────────────────────────────────────────────
 info "Installing system packages..."
 apt-get update -qq
-PKGS=(python3 python3-venv python3-pip rsync git curl)
+PKGS=(python3 python3-venv python3-pip rsync git curl dnsutils)
 
 if [[ "$APP_ONLY" != "1" ]]; then
     PKGS+=(dnsmasq iptables iptables-persistent netfilter-persistent)
